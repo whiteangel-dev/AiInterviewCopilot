@@ -29,7 +29,7 @@
 | Smoke test, packaged app with Fuses (Linux) | **242 ms**; native module loads from `app.asar.unpacked` |
 | Smoke test, dev server (`npm run dev`) | 732 ms |
 | Fuses (read back from the packaged binary) | RunAsNode, NODE_OPTIONS, inspect arguments: off. Asar integrity, only-load-from-asar, cookie encryption: on |
-| Windows | Runs in CI: unit tests, e2e, installer build, unpacked and installed smoke tests |
+| Windows (`windows-latest`) | **Pass** ([run](https://github.com/whiteangel-dev/AiInterviewCopilot/actions/runs/41681509965)): unit tests, e2e with real DPAPI, NSIS installer build, smoke tests of the unpacked and the silently installed app (secure storage `os`). Installer artifact: 117 MB |
 
 **End-to-end tests:**
 1. First run: engine ready, setup checklist, database file not plaintext.
