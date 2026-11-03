@@ -1,0 +1,113 @@
+@import 'tailwindcss';
+
+/*
+ * Theme tokens. Dark mode follows `prefers-color-scheme`, which the main process
+ * drives through nativeTheme.themeSource (System / Light / Dark setting).
+ * `--background` must match WINDOW_COLORS in src/main/theme.ts (title bar overlay).
+ */
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #18181b;
+  --sidebar: #f7f7f9;
+  --card: #ffffff;
+  --muted: #f3f3f6;
+  --muted-foreground: #696975;
+  --border: #e6e6eb;
+  --input: #d9d9e1;
+  --ring: #6366f1;
+  --primary: #4f46e5;
+  --primary-foreground: #ffffff;
+  --accent: #eef0ff;
+  --accent-foreground: #4338ca;
+  --success: #15803d;
+  --warning: #b45309;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: #0e0e11;
+    --foreground: #ececf0;
+    --sidebar: #131317;
+    --card: #15151a;
+    --muted: #1d1d23;
+    --muted-foreground: #9b9ba7;
+    --border: #25252d;
+    --input: #32323c;
+    --ring: #818cf8;
+    --primary: #6366f1;
+    --primary-foreground: #ffffff;
+    --accent: #1f1d47;
+    --accent-foreground: #c7cbff;
+    --success: #4ade80;
+    --warning: #fbbf24;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --font-sans:
+    'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Cascadia Mono', Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+/* Frameless window: the title bar strip is draggable; controls inside opt out. */
+@utility drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+@utility no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    cursor: default;
+    overflow: hidden;
+  }
+  * {
+    @apply border-border;
+  }
+  ::selection {
+    @apply bg-primary/25;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-[3px] border-solid border-transparent bg-muted-foreground/25 bg-clip-padding;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+}

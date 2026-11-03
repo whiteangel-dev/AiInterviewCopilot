@@ -1,0 +1,20 @@
+{
+  "name": "@aic/ipc",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Contracts between processes: IPC channels, settings schema, engine RPC, errors.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./channels": "./src/channels.ts",
+    "./errors": "./src/errors.ts",
+    "./models": "./src/models.ts"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "zod": "^4.6.7"
+  }
+}

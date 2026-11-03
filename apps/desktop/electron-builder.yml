@@ -1,0 +1,61 @@
+# electron-builder: https://www.electron.build/configuration
+appId: com.whiteangel.aiinterviewcopilot
+productName: AI Interview Copilot
+copyright: Copyright © 2026 AI Interview Copilot
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - out/**/*
+  - '!out/**/*.map'
+  - resources/**/*
+  - package.json
+  # Native SQLite: ship only this platform's prebuilt binary, not the C sources.
+  - '!node_modules/better-sqlite3-multiple-ciphers/{deps,src}/**'
+  - '!node_modules/better-sqlite3-multiple-ciphers/prebuilds/*.node'
+  - 'node_modules/better-sqlite3-multiple-ciphers/prebuilds/${platform}-${arch}.node'
+  - '!node_modules/node-addon-api/**'
+
+asar: true
+asarUnpack:
+  - '**/*.node'
+# The SQLite module ships Node-API prebuilds that load in Electron as-is.
+npmRebuild: false
+
+# Hardening: https://www.electronjs.org/docs/latest/tutorial/fuses
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: AI-Interview-Copilot-Setup-${version}-${arch}.${ext}
+  # Code signing is configured in CI through environment variables (see docs/release.md):
+  # Azure Trusted Signing (AZURE_* + azureSignOptions) or a certificate (CSC_LINK).
+
+nsis:
+  oneClick: true
+  perMachine: false
+  shortcutName: AI Interview Copilot
+  uninstallDisplayName: AI Interview Copilot
+  deleteAppDataOnUninstall: false
+
+linux:
+  # Development builds only; Linux is not a release target.
+  target: [dir]
+  category: Office
+  executableName: ai-interview-copilot
+
+publish:
+  provider: github
+  owner: whiteangel-dev
+  repo: AiInterviewCopilot

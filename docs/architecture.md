@@ -1,6 +1,6 @@
 # AI Interview Copilot — Architecture
 
-**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)). Individual decisions are recorded in [docs/adr/](adr/).
+**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)). Individual decisions are recorded in [docs/adr/](adr/).
 
 A Windows-first (macOS later) desktop app. It listens to a live job interview, detects the interviewer's questions, and streams short, natural answers grounded in the candidate's resume and their own notes ("Application Knowledge"). English-only.
 
@@ -22,8 +22,8 @@ A Windows-first (macOS later) desktop app. It listens to a live job interview, d
 | Audio capture | Rust native module (napi-rs) using WASAPI on Windows; Swift bridge for Core Audio taps on macOS |
 | Speech-to-text | Gemini Live API, `gemini-3.5-transcribe-live` |
 | AI models | Gemini first (`@google/genai`), behind provider interfaces so OpenAI and Claude can be added later |
-| Storage | SQLite (`better-sqlite3-multiple-ciphers`, encrypted), Drizzle ORM, FTS5 keyword search, sqlite-vec |
-| Secrets | Electron `safeStorage` (Windows DPAPI / macOS Keychain); keys never reach the UI |
+| Storage | SQLite (`better-sqlite3-multiple-ciphers`, ChaCha20-Poly1305), Drizzle ORM with embedded migrations, FTS5 keyword search, sqlite-vec |
+| Secrets | Electron `safeStorage`, async API (Windows DPAPI / macOS Keychain); keys never reach the UI, database or logs |
 | Tests | Vitest, a replay harness that runs recorded audio through the pipeline, AI test sets, Playwright end-to-end |
 
 ## 3. Processes
@@ -43,7 +43,11 @@ A Windows-first (macOS later) desktop app. It listens to a live job interview, d
 
 - **Main process** stays light; if it blocks, every window freezes.
 - **Engine** runs the whole live pipeline in an Electron `utilityProcess`. Heavy jobs (resume parsing, embeddings) run on worker threads.
-- **Renderers** are sandboxed, use `contextIsolation`, have no Node.js access and a strict CSP. Every IPC payload is validated with Zod.
+- **Renderers** are sandboxed, use `contextIsolation`, have no Node.js access and a strict CSP. The packaged UI loads from `app://renderer/`, not `file://`.
+- **IPC:**
+  - renderer → main uses one allowlisted `invoke` bridge; main checks the sender, validates every payload with Zod, and replies with a `Result` envelope that keeps error codes;
+  - main ↔ engine uses a typed RPC (`@aic/ipc`) with timeouts and events;
+  - main restarts a crashed engine with backoff. Details: [ADR 0007](adr/0007-app-foundation.md).
 
 ## 4. Live pipeline
 
@@ -123,38 +127,47 @@ Use only Gemini's automatic (implicit) caching: explicit caches *increased* late
 | Search | `context_chunks` + FTS5 + sqlite-vec |
 | Answer bank | `prepared_answers` |
 | Sessions | `sessions` (pins profile version), `session_knowledge` (pins snapshots), `transcript_segments` (final only), `questions`, `answers` (tokens, time to first token, model), `latency_events` |
-| Settings | `provider_configs` (key *reference* only), `app_settings` |
+| Settings | `provider_configs` (key *reference* and last 4 characters only; cached model list), `app_settings` (one row per section) |
 
-IDs are UUIDv7. User content is soft-deleted, and "delete my data" removes it permanently (`VACUUM`). The database is backed up before each migration.
+IDs are UUIDv7. User content is soft-deleted, and "delete my data" removes it permanently. The schema version is `PRAGMA user_version`. An existing database is backed up (still encrypted) before migrating, and a database from a newer app version is refused.
+
+The database key is 256 random bits created on first run and kept in main's secret store (`secrets.json`, each entry encrypted with `safeStorage`). If it can't be read (for example, the data was copied to another Windows account), the app offers to start fresh instead of failing silently.
 
 ## 8. Security and privacy
 
 - **API keys:** stored only through the OS keychain and used only in the engine process. Never in the database, logs or renderers.
 - **No raw audio** is stored by default. Transcripts have retention controls; export and wipe-all are available.
-- **Electron hardening:** sandbox, `contextIsolation`, CSP, Fuses (no `RunAsNode`, ASAR integrity checks).
+- **Electron hardening:**
+  - sandbox and `contextIsolation`;
+  - CSP served with the `app://` protocol;
+  - no permissions, new windows, navigation or `<webview>`;
+  - DevTools off in release builds;
+  - Fuses: no `RunAsNode`, `NODE_OPTIONS` or inspect arguments; ASAR integrity and only-load-from-asar.
 - **Consent:** a notice during setup about recording consent and employer policies.
 
-## 9. Repository layout (target)
+## 9. Repository layout
 
 ```
-apps/desktop/        Electron app: src/{main,preload,engine,renderer}
-packages/core/       pipeline logic (no Electron)
-packages/db/         schema, migrations, repositories
-packages/ipc/        IPC contracts (types + Zod)
-packages/prompts/    versioned prompts + JSON schemas
-packages/native-audio/  Rust napi-rs module (from spikes/native-audio)
-evals/               audio fixtures, question detection, answer quality, latency
-docs/                architecture, ADRs, phase reports
-spikes/              Phase 0 benchmarks (kept as reference)
+apps/desktop/        Electron app: src/{main,preload,engine,renderer}, e2e/, electron-builder.yml
+packages/ipc/        contracts: IPC channels, settings schema, engine RPC, errors (Zod)
+packages/core/       engine logic without Electron: AI providers, model roles, logging, redaction
+packages/db/         schema, generated migrations (drizzle/), repositories
+docs/                architecture, ADRs, phase reports, release process
+spikes/              Phase 0 benchmarks and the native audio module (kept as reference)
 ```
+
+Still to come:
+- `packages/prompts/`: versioned prompts and JSON schemas (Phase 2/4).
+- `packages/native-audio/`: moves from `spikes/native-audio` in Phase 3.
+- `evals/`: Phase 4.
 
 ## 10. Roadmap
 
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Speed spikes, provider choices, native audio module, end-to-end prototype | **Done** (real-device Windows capture test moves to Phase 3) |
-| 1 | Electron app foundation, monorepo, encrypted database, keychain, settings, CI with signed Windows builds | Next |
-| 2 | Resume import and extraction, Application Knowledge, answer bank | |
+| 1 | Electron app foundation, monorepo, encrypted database, keychain, settings, CI with Windows builds | **Done** ([summary](phase1/summary.md)); signing waits for a certificate |
+| 2 | Resume import and extraction, Application Knowledge, answer bank | Next |
 | 3 | Audio capture on real devices, live transcription, copilot window, hotkeys | |
 | 4 | Turn detection + answer generation (**Windows MVP**) | |
 | 5 | Speed and quality hardening: fact check, echo cancellation, provider failover | |

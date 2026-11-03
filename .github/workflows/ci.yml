@@ -9,7 +9,99 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  app:
+    name: App (lint, types, unit, e2e)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - name: Database migrations match the schema
+        run: |
+          npm run db:generate
+          test -z "$(git status --porcelain packages/db/drizzle)" || {
+            echo "::error::packages/db/src/schema.ts changed without a migration. Run 'npm run db:generate' and commit the result."
+            git status --porcelain packages/db/drizzle
+            exit 1
+          }
+      - run: npm run build
+      - name: Electron system libraries
+        run: npx playwright install-deps chromium
+      - name: End-to-end tests
+        run: xvfb-run -a npm run test:e2e
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: e2e-report-linux
+          path: |
+            apps/desktop/playwright-report
+            apps/desktop/test-results
+          retention-days: 7
+
+  windows:
+    name: Windows (unit, e2e, installer)
+    runs-on: windows-latest
+    env:
+      # Signing is skipped while these are unset (no certificate yet). See docs/release.md.
+      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - name: End-to-end tests (real DPAPI)
+        run: npm run test:e2e
+      - name: Build installer
+        working-directory: apps/desktop
+        run: npx electron-builder --win --publish never
+      - name: Smoke test (unpacked app)
+        shell: pwsh
+        run: ./scripts/ci/smoke-windows.ps1 -Exe "apps/desktop/dist/win-unpacked/AI Interview Copilot.exe" -Report smoke-unpacked.json
+      - name: Smoke test (installed app)
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/desktop/dist -Filter 'AI-Interview-Copilot-Setup-*.exe' | Select-Object -First 1
+          $p = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer exited with $($p.ExitCode)" }
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'AI Interview Copilot.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'Installed app not found' }
+          Write-Host "Installed at $($exe.FullName)"
+          ./scripts/ci/smoke-windows.ps1 -Exe $exe.FullName -Report smoke-installed.json
+      - uses: actions/upload-artifact@v5
+        with:
+          name: windows-installer
+          path: |
+            apps/desktop/dist/*.exe
+            apps/desktop/dist/*.blockmap
+            apps/desktop/dist/latest.yml
+          retention-days: 14
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: e2e-report-windows
+          path: |
+            apps/desktop/playwright-report
+            apps/desktop/test-results
+            smoke-*.json
+          retention-days: 7
+
   spikes:
     name: Phase 0 spikes (TypeScript)
     runs-on: ubuntu-latest

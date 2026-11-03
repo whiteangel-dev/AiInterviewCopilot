@@ -1,0 +1,25 @@
+{
+  "name": "@aic/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Encrypted SQLite: schema, migrations, repositories. Owned by the engine process.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@aic/ipc": "*",
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
+    "drizzle-orm": "^0.45.4",
+    "uuidv7": "^1.2.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "drizzle-kit": "^0.31.11"
+  }
+}

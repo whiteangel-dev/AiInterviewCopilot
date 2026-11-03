@@ -3,6 +3,11 @@ node_modules/
 dist/
 out/
 target/
+*.tsbuildinfo
+
+# Test output
+test-results/
+playwright-report/
 
 # Secrets — never commit API keys
 .env

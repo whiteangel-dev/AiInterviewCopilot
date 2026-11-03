@@ -1,0 +1,11 @@
+node_modules
+out
+dist
+target
+test-results
+playwright-report
+package-lock.json
+*.md
+docs/
+spikes/
+packages/db/drizzle/
