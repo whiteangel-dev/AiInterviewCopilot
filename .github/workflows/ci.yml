@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spikes:
+    name: Phase 0 spikes (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: spikes
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: spikes/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  native-audio:
+    name: Native audio module (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: spikes/native-audio
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - run: npm run build
+      # Hosted runners have no audio endpoints: this verifies the module loads on
+      # Windows and the JS plumbing works; real-device capture is tested manually.
+      - run: npm run smoke

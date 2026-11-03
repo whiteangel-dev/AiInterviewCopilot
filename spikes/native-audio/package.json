@@ -1,0 +1,12 @@
+{
+  "name": "aic-native-audio",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Phase 0 Option B: Rust (napi-rs) WASAPI capture module",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "cargo test",
+    "smoke": "node smoke.mjs"
+  }
+}

@@ -14,7 +14,7 @@ import { ThinkingLevel } from '@google/genai';
 import type { Content, GenerateContentConfig, GenerateContentResponse, ThinkingConfig } from '@google/genai';
 import { createClient, errorMessage, parseArgs, sleep } from './lib/env.ts';
 import { fmtMs, mean, percentile, table } from './lib/stats.ts';
-import { buildContents, buildSystemInstruction, loadQuestions } from './prompt.ts';
+import { buildContents, buildSystemInstruction, loadKnowledge, loadProfile, loadQuestions } from './prompt.ts';
 import type { Question } from './prompt.ts';
 import { listModels, pickTextModels } from './models.ts';
 
@@ -26,7 +26,12 @@ const useExplicitCache = args.has('explicit-cache');
 const MAX_OUTPUT_TOKENS = 1024;
 
 const ai = createClient();
-const systemInstruction = buildSystemInstruction();
+// --context-copies N appends N archived copies of the candidate materials to mimic a larger,
+// realistic knowledge base (prompt size is what matters for caching and TTFT here).
+const contextCopies = Number(args.get('context-copies') ?? 0);
+const systemInstruction =
+  buildSystemInstruction() +
+  Array.from({ length: contextCopies }, (_, i) => `\n\nARCHIVED NOTES ${i + 1} (older copy of the candidate's materials; reference only)\n${loadProfile()}\n${loadKnowledge()}`).join('');
 const questions = loadQuestions().slice(0, limit);
 const models = args.get('models')?.split(',').map((s) => s.trim()).filter(Boolean) ?? pickTextModels(await listModels());
 if (models.length === 0) {

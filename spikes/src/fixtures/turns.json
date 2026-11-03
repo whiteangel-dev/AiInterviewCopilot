@@ -1,0 +1,20 @@
+[
+  { "id": "t01", "phrases": ["So I see you were at Quayside for a while,", "and I'm curious how big the platform team was."], "pausesMs": [700], "final": "answer" },
+  { "id": "t02", "phrases": ["Tell me about a time when", "you had to push back on a product decision."], "pausesMs": [800], "final": "answer" },
+  { "id": "t03", "phrases": ["What's your experience with Postgres?"], "pausesMs": [], "final": "answer" },
+  { "id": "t04", "phrases": ["Okay, so,", "let's switch gears a little.", "How do you approach code reviews?"], "pausesMs": [600, 900], "final": "answer" },
+  { "id": "t05", "phrases": ["Can you explain the outbox pattern", "and why you used it instead of just publishing straight to Kafka?"], "pausesMs": [650], "final": "answer" },
+  { "id": "t06", "phrases": ["I'd like to hear about your leadership experience.", "Specifically, how do you handle an underperforming engineer?"], "pausesMs": [900], "final": "answer" },
+  { "id": "t07", "phrases": ["How would you design,", "um,", "a notification system for, say, ten million users?"], "pausesMs": [700, 600], "final": "answer" },
+  { "id": "t08", "phrases": ["Why did you leave Tallgrass?"], "pausesMs": [], "final": "answer" },
+  { "id": "t09", "phrases": ["Walk me through the incident.", "Like, what was the first alert you saw?"], "pausesMs": [1000], "final": "answer",
+    "context": { "question": "Tell me about a time you had to deal with a major production incident.", "candidateSaid": "Sure. The big one was Black Friday 2022 at Quayside, when consumer lag on shipment events grew to about two hours." } },
+  { "id": "t10", "phrases": ["So we use Go pretty heavily here.", "How comfortable are you with Go?"], "pausesMs": [800], "final": "answer" },
+  { "id": "t11", "phrases": ["Interesting.", "And how did the team react to that change?"], "pausesMs": [700], "final": "answer",
+    "context": { "question": "What did you change after the incident?", "candidateSaid": "We made the enrichment step asynchronous behind a circuit breaker and added lag alerts at two minutes." } },
+  { "id": "t12", "phrases": ["Last question from me.", "What questions do you have for us?"], "pausesMs": [700], "final": "answer" },
+  { "id": "t13", "phrases": ["Great, that's really helpful context, thanks."], "pausesMs": [], "final": "ignore" },
+  { "id": "t14", "phrases": ["Hmm, let me see,", "where was I,", "oh right,", "tell me about your experience with on-call."], "pausesMs": [800, 700, 500], "final": "answer" },
+  { "id": "t15", "phrases": ["Is there anything about the role", "that you'd want to know more about?"], "pausesMs": [600], "final": "answer" },
+  { "id": "t16", "phrases": ["Can you tell me about your current role?"], "pausesMs": [], "final": "answer" }
+]

@@ -1,0 +1,23 @@
+[package]
+name = "aic-native-audio"
+version = "0.1.0"
+edition = "2024"
+description = "AI Interview Copilot native audio capture (Phase 0 spike, Option B)"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3.16.1", default-features = false, features = ["napi8"] }
+napi-derive = "3.7.0"
+
+[build-dependencies]
+napi-build = "2.6.0"
+
+[target."cfg(windows)".dependencies]
+wasapi = "0.26.0"
+
+[profile.release]
+lto = true
+strip = "symbols"

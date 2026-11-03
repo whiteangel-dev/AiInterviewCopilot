@@ -1,65 +1,98 @@
-# Phase 0 — Results so far (2026-11-03)
+# Phase 0 — Results (completed 2026-11-03)
 
-Measured from the Linux dev machine's network. Fixtures: a fictional candidate (`spikes/src/fixtures/`), 17 interviewer turns, and synthetic interviewer audio from Gemini TTS (clean speech; real call audio is still to be tested).
+**Exit criterion met:** the end-to-end prototype gets from the interviewer's last word to the first answer word in **0.97 s median, 1.24 s at the 95th percentile** (target: 1.5 s or less at the median).
 
-## Speech-to-text: Gemini Live, `gemini-3.5-transcribe-live`
+Measured from the Linux dev machine's network. Fixtures: a fictional candidate (`spikes/src/fixtures/`), 17 interviewer turns plus 16 turns split at mid-sentence pauses, and synthetic interviewer audio from Gemini TTS (clean speech). Real call audio comes in Phase 3. Decisions: [ADRs](../adr/).
 
-All 17 clips (128 s) were streamed at real-time pace in 20 ms chunks over one session, with English language set and profile terms passed as custom vocabulary.
+## 1. End-to-end prototype (`npm run e2e`)
 
-| Silence before end of segment | First partial text after speech starts | Final transcript after speech ends | Mean WER |
+The audio is streamed in real time and goes through the full pipeline: local VAD (300 ms pause) → Live transcription → turn analyzer ∥ speculative answer. The answer is shown only when confirmed, and cancelled on "wait", "ignore", or when the interviewer resumes.
+
+| Version | Last word → first answer word | Correct outcome | Answers shown too early |
 |---|---|---|---|
-| 500 ms | p50 544 ms · p95 991 ms | p50 910 ms · p95 1104 ms | 2.7% |
+| v1: one attempt per pause, 1.2 s fallback | p50 1,893 ms · p95 2,162 ms | 17/17 | 0 |
+| **v2: + re-run when the transcript grows, + "?" fast path** | **p50 971 ms · p95 1,241 ms** | **17/17** | **0** |
+
+- **Why v1 was slow:** at the 300 ms pause, the transcript was still missing the last words (it arrives ~0.5–0.8 s after speech ends), so the analyzer correctly said "wait".
+- **Cost:** about 2 model calls per turn, about half of them cancelled.
+
+## 2. Speech-to-text: `gemini-3.5-transcribe-live`
+
+| End-of-segment silence | First partial text after speech starts | Final transcript after speech ends | Mean WER |
+|---|---|---|---|
+| 500 ms | p50 544 ms · p95 991 ms | p50 910 ms · p95 1,104 ms | 2.7% |
 | **300 ms** | p50 554 ms · p95 979 ms | **p50 714 ms · p95 910 ms** | 2.7% |
 
-- Partial text updates word by word (5–22 updates per utterance), so starting an answer early is possible.
-- Nearly all of the word error rate is formatting ("twelve" → "12", "fifty thousand" → "50,000") and dropped filler words ("uh", "mm-hm").
-- No voice-activity events or token usage were reported for this model. Cost needs checking on the pricing page.
+- **Partial text** updates word by word and holds the whole utterance so far.
+- **Errors** are almost all formatting ("twelve" → "12") and dropped filler words.
+- **Not reported** by this model: voice-activity events and token usage. Cost is still to be confirmed.
 
-## Answer generation: streaming `generateContent`, minimal thinking
+## 3. Answer generation (17 turns × 2 runs, ~1.9k-token prompt)
 
-Each request had a ~1.9k-token prompt (rules + profile + knowledge), with 17 turns × 2 runs per model.
-
-| Model | Thinking setting accepted | TTFT p50 | TTFT p95 | Total p50 | Skip/answer correct |
+| Model | Thinking | TTFT p50 | TTFT p95 | Total p50 | Skip/answer correct |
 |---|---|---|---|---|---|
-| **gemini-3.5-flash-lite** | `thinkingLevel: MINIMAL` | **528 ms** | **717 ms** | 842 ms | 33/34 |
-| gemini-3.8-flash | `thinkingBudget: 0` | 1901 ms | 5031 ms | 2625 ms | 34/34 |
-| gemini-3.1-pro-preview | `thinkingLevel: LOW` | 4840 ms | 6072 ms | 5219 ms | 34/34 |
+| **gemini-3.5-flash-lite** | `MINIMAL` | **528 ms** | **717 ms** | 842 ms | 33/34 |
+| gemini-3.8-flash | budget 0 | 1,901 ms | 5,031 ms | 2,625 ms | 34/34 |
+| gemini-3.1-pro-preview | `LOW` | 4,840 ms | 6,072 ms | 5,219 ms | 34/34 |
 
-- **Provider cache hits: 0%.** A ~1.9k-token prompt is probably below Gemini's implicit-cache minimum. Re-test with a realistic, larger profile and with explicit caching (`--explicit-cache`).
-- **Quality (flash-lite):** it handled the Kubernetes trap question honestly and followed the salary instruction partly. It made small embellishments (for example, put the Datadog alert at the wrong employer). This confirms the background fact check is needed.
-- **Prompt fixes found:** pass today's date (otherwise durations are wrong); forbid invented small-talk details; require contractions.
+**Quality (flash-lite):**
+- **Honest on the Kubernetes trap question.**
+- **Followed the salary instruction only partly.**
+- **Small embellishments.** For example, it put a monitoring alert at the wrong employer, which confirms the need for a background fact check.
+- **Prompt fixes applied:** pass today's date, forbid invented small-talk details, require contractions.
 
-## Estimated end-to-end time (interviewer stops → first answer words)
+## 4. Caching (flash-lite, 17 turns, ~7.2k-token prompt)
 
-| Path | p50 | p95 |
+| Mode | Cached share | TTFT p50 | TTFT p95 |
+|---|---|---|---|
+| Implicit (automatic) | 9% | **555 ms** | 733 ms |
+| Explicit cache | 99% | 725 ms | 1,467 ms |
+
+Prompt size barely affects flash-lite's speed (1.9k → 7.2k tokens: 528 → 555 ms). Explicit caching is slower, so the live path uses implicit caching only.
+
+## 5. Turn analyzer (`npm run bench:turns`, flash-lite, 49 probes × 2)
+
+| Decision ready p50 / p95 | Turn ends → complete | Mid-turn pauses → wait | Action correct | Follow-up correct |
+|---|---|---|---|---|
+| 606 / 776 ms | 97% | 81% | 97% | 98% |
+
+| End-of-turn policy | Cuts in early at mid-turn pauses | End detected after p50 |
 |---|---|---|
-| Early start: 300 ms local silence + partial text → flash-lite | ~0.85 s | ~1.0 s |
-| Wait for final transcript → flash-lite | ~1.25 s | ~1.6 s |
+| Silence only, 300 ms | 100% | 300 ms |
+| Silence only, 700 ms | 69% | 700 ms |
+| Silence only, 1,200 ms | 0% | 1,200 ms |
+| **300 ms + analyzer** | **19%** (all genuinely ambiguous) | 903 ms |
 
-Both meet the target of 1.5 s or less at the median.
+## 6. Native audio module (Option B, `spikes/native-audio`)
 
-## Provisional decisions (to confirm before Phase 1)
+| Check | Result |
+|---|---|
+| Frame assembler unit tests (passthrough, 48 kHz stereo float → 16 kHz, 8 kHz upsampling, chunk-boundary invariance) | 4/4 pass |
+| `cargo clippy` for Linux and for `x86_64-pc-windows-msvc` (WASAPI code) | Clean |
+| Node smoke test (test tone through napi → JS) | 51 frames/s, max gap 20.9 ms, level −12 dBFS, contiguous sequence |
+| Windows build + load in CI | Set up (`.github/workflows/ci.yml`) |
+| **Real Windows devices** (mic, loopback, per-app) | **Not yet run. Moved to Phase 3, task 1** |
 
-1. **STT:** `gemini-3.5-transcribe-live`, with 300 ms end-of-segment silence; turn detection merges segments.
-2. **Live answers:** `gemini-3.5-flash-lite` as the default ("Speed" and "Balanced"). `gemini-3.1-pro` is available as a slower "Quality" option. `gemini-3.8-flash` isn't worth it: it's slower and less consistent than flash-lite.
-3. **Model names are configuration, not code.** The app discovers available models through the Models API, because the model list changes often.
+## Carried into later phases
 
-## Still to do in Phase 0
-
-- [ ] Windows audio capture, Option A (`spikes/capture-win/`): run on a Windows PC (see its README).
-- [ ] Windows audio capture, Option B (Rust napi-rs native module): needs a Rust toolchain.
-- [ ] Transcription accuracy on real call audio (from the Option A recordings).
-- [ ] Turn-detection prototype on audio with natural mid-sentence pauses.
-- [ ] Question-analyzer latency and accuracy (flash-lite with structured output).
-- [ ] Cache behavior with a realistic larger profile; cost per interview hour.
+- **Phase 3:**
+  - real-device Windows capture tests (`spikes/capture-win` and `spikes/native-audio/smoke.mjs`);
+  - transcription accuracy on real call audio;
+  - Live session limits for long interviews;
+  - transcription cost per hour.
+- **Phase 4:** turn-detection tuning on real interviews (pause lengths, the "?" fast-path risk).
+- **Phase 5:** background fact check for embellishments; explicit caching for cost on large knowledge bases.
 
 ## Re-run
 
 ```
-cd spikes
-npm install
-npm run models                 # what this key can access
-npm run gen-audio              # synthetic interviewer clips
+cd spikes && npm install
+npm run models                         # what the key can access
+npm run gen-audio                      # synthetic interviewer clips
 npm run bench:stt -- --vad-silence 300
-npm run bench:llm -- --runs 2  # add --models a,b,c to compare others
+npm run bench:llm -- --runs 2          # --models a,b  --context-copies 4  --explicit-cache
+npm run bench:turns -- --runs 2
+npm run e2e                            # full pipeline, last word → first answer word
+
+cd native-audio && npm run build && npm run smoke   # needs Rust; on Windows also captures real devices
 ```
