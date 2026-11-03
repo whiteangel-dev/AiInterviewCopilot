@@ -33,4 +33,4 @@ node smoke.mjs --seconds 30 --pid <zoom/teams pid>   # longer test with per-app 
 
 ## Status
 
-The Windows code type-checks against `x86_64-pc-windows-msvc`, and CI builds it on a Windows runner. It hasn't been run against real audio devices yet; that is Phase 3, task 1.
+The Windows code builds with MSVC, loads in Node and passes the smoke test on a Windows CI runner. It hasn't been run against real audio devices yet; that is Phase 3, task 1.

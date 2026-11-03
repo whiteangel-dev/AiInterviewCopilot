@@ -70,7 +70,7 @@ Prompt size barely affects flash-lite's speed (1.9k → 7.2k tokens: 528 → 555
 | Frame assembler unit tests (passthrough, 48 kHz stereo float → 16 kHz, 8 kHz upsampling, chunk-boundary invariance) | 4/4 pass |
 | `cargo clippy` for Linux and for `x86_64-pc-windows-msvc` (WASAPI code) | Clean |
 | Node smoke test (test tone through napi → JS) | 51 frames/s, max gap 20.9 ms, level −12 dBFS, contiguous sequence |
-| Windows build + load in CI | Set up (`.github/workflows/ci.yml`) |
+| Windows build + load in CI | **Pass**: MSVC build, Node load, smoke test on `windows-latest` ([run](https://github.com/whiteangel-dev/AiInterviewCopilot/actions/runs/41584452723)) |
 | **Real Windows devices** (mic, loopback, per-app) | **Not yet run. Moved to Phase 3, task 1** |
 
 ## Carried into later phases

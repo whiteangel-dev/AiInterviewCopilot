@@ -20,7 +20,7 @@ Electron's built-in capture (`getDisplayMedia` loopback) has these limits:
 - Frame assembler unit tests pass.
 - The Windows code type-checks and passes clippy for `x86_64-pc-windows-msvc`.
 - The Rust → JS plumbing delivers frames exactly every 20 ms (Linux test-tone smoke test).
-- CI is set up to build and load the module on a Windows runner (first run on the Phase 0 push).
+- CI built the module with MSVC on `windows-latest`, loaded it in Node, and passed the smoke test ([run 41584452723](https://github.com/whiteangel-dev/AiInterviewCopilot/actions/runs/41584452723)).
 - **Not yet run against real Windows audio devices.**
 
 ## Consequences
