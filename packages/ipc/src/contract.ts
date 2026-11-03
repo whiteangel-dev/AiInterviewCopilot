@@ -1,5 +1,9 @@
 import { z } from 'zod';
+import { PreparedAnswerFieldsSchema } from './answers';
 import type { EventChannel, InvokeChannel } from './channels';
+import type { EngineMethods } from './engine';
+import { KnowledgeItemFieldsSchema } from './knowledge';
+import { CandidateProfileSchema, type JobProgress } from './profile';
 import { SettingsPatchSchema, type Settings } from './settings';
 import {
   ProviderIdSchema,
@@ -28,6 +32,12 @@ export const ExternalUrlSchema = z.url().refine((value) => {
 
 const NoInput = z.undefined();
 const Provider = z.strictObject({ provider: ProviderIdSchema });
+const Id = z.string().regex(/^[0-9a-f-]{8,64}$/i, 'Invalid ID');
+const JobId = z.string().regex(/^[\w-]{8,64}$/, 'Invalid job ID');
+const ById = z.strictObject({ id: Id });
+
+/** Resumes larger than this are rejected before they reach the engine. */
+export const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 
 /** Renderer → main calls: input schemas (validated in main) and output types. */
 export const invokeContract = {
@@ -43,9 +53,107 @@ export const invokeContract = {
   'apiKey:verify': Provider,
   'apiKey:remove': Provider,
   'models:list': z.strictObject({ provider: ProviderIdSchema, refresh: z.boolean() }),
+
+  'jobs:cancel': z.strictObject({ jobId: JobId }),
+  'profiles:list': NoInput,
+  'profiles:get': ById,
+  'profiles:import': z.strictObject({
+    jobId: JobId,
+    fileName: z.string().trim().min(1).max(255),
+    data: z
+      .instanceof(Uint8Array)
+      .refine((d) => d.byteLength > 0, 'The file is empty.')
+      .refine((d) => d.byteLength <= MAX_RESUME_BYTES, 'The file is larger than 10 MB.'),
+    profileId: Id.nullable(),
+  }),
+  'profiles:reanalyze': z.strictObject({ jobId: JobId, id: Id }),
+  'profiles:saveVersion': z.strictObject({ id: Id, data: CandidateProfileSchema }),
+  'profiles:restoreVersion': z.strictObject({ id: Id, versionId: Id }),
+  'profiles:rename': z.strictObject({ id: Id, name: z.string().trim().min(1).max(120) }),
+  'profiles:delete': ById,
+  'profiles:resumeText': ById,
+  'knowledge:listBases': NoInput,
+  'knowledge:getBase': ById,
+  'knowledge:createBase': z.strictObject({
+    name: z.string().trim().min(1, 'Name it first.').max(120),
+    description: z.string().trim().max(500),
+  }),
+  'knowledge:updateBase': z.strictObject({
+    id: Id,
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(500).optional(),
+  }),
+  'knowledge:deleteBase': ById,
+  'knowledge:addItems': z.strictObject({
+    baseId: Id,
+    items: z.array(KnowledgeItemFieldsSchema).min(1).max(200),
+  }),
+  'knowledge:updateItem': z.strictObject({ id: Id, fields: KnowledgeItemFieldsSchema }),
+  'knowledge:deleteItem': ById,
+  'knowledge:analyze': z.strictObject({ jobId: JobId, baseId: Id, profileId: Id.nullable() }),
+  'knowledge:splitNotes': z.strictObject({
+    jobId: JobId,
+    text: z.string().trim().min(1).max(30_000),
+  }),
+  'context:preview': z.strictObject({ profileId: Id.nullable(), baseId: Id.nullable() }),
+  'answers:list': z.strictObject({ profileId: Id }),
+  'answers:generate': z.strictObject({ jobId: JobId, profileId: Id, baseId: Id.nullable() }),
+  'answers:add': z.strictObject({ profileId: Id, fields: PreparedAnswerFieldsSchema }),
+  'answers:update': z.strictObject({ id: Id, fields: PreparedAnswerFieldsSchema }),
+  'answers:delete': ById,
+  'answers:match': z.strictObject({ profileId: Id, question: z.string().trim().min(1).max(1000) }),
 } satisfies Record<InvokeChannel, z.ZodType>;
 
-export interface InvokeOutputs {
+/**
+ * Channels that main forwards unchanged to an engine method. Their output type
+ * is the engine method's result.
+ */
+export const FORWARDED_CHANNELS = {
+  'jobs:cancel': 'jobs.cancel',
+  'profiles:list': 'profiles.list',
+  'profiles:get': 'profiles.get',
+  'profiles:import': 'profiles.import',
+  'profiles:reanalyze': 'profiles.reanalyze',
+  'profiles:saveVersion': 'profiles.saveVersion',
+  'profiles:restoreVersion': 'profiles.restoreVersion',
+  'profiles:rename': 'profiles.rename',
+  'profiles:delete': 'profiles.delete',
+  'profiles:resumeText': 'profiles.resumeText',
+  'knowledge:listBases': 'knowledge.listBases',
+  'knowledge:getBase': 'knowledge.getBase',
+  'knowledge:createBase': 'knowledge.createBase',
+  'knowledge:updateBase': 'knowledge.updateBase',
+  'knowledge:deleteBase': 'knowledge.deleteBase',
+  'knowledge:addItems': 'knowledge.addItems',
+  'knowledge:updateItem': 'knowledge.updateItem',
+  'knowledge:deleteItem': 'knowledge.deleteItem',
+  'knowledge:analyze': 'knowledge.analyze',
+  'knowledge:splitNotes': 'knowledge.splitNotes',
+  'context:preview': 'context.preview',
+  'answers:list': 'answers.list',
+  'answers:generate': 'answers.generate',
+  'answers:add': 'answers.add',
+  'answers:update': 'answers.update',
+  'answers:delete': 'answers.delete',
+  'answers:match': 'answers.match',
+} as const satisfies Partial<Record<InvokeChannel, keyof EngineMethods>>;
+
+export type ForwardedChannel = keyof typeof FORWARDED_CHANNELS;
+
+/** Forwarded channels that run AI jobs (minutes, not milliseconds). */
+export const LONG_RUNNING_CHANNELS: ReadonlySet<InvokeChannel> = new Set([
+  'profiles:import',
+  'profiles:reanalyze',
+  'knowledge:analyze',
+  'knowledge:splitNotes',
+  'answers:generate',
+]);
+
+type ForwardedOutputs = {
+  [C in ForwardedChannel]: EngineMethods[(typeof FORWARDED_CHANNELS)[C]]['result'];
+};
+
+export interface InvokeOutputs extends ForwardedOutputs {
   'app:getInfo': AppInfo;
   'app:openPath': void;
   'app:openExternal': void;
@@ -68,7 +176,19 @@ export interface EventPayloads {
   'engine:status': EngineStatus;
   'settings:changed': Settings;
   'apiKey:changed': ApiKeyStatus;
+  'job:progress': JobProgress;
 }
+
+// Each forwarded channel's validated input must be what its engine method takes.
+type ForwardedInputsMatch = {
+  [C in ForwardedChannel]: z.output<
+    (typeof invokeContract)[C]
+  > extends EngineMethods[(typeof FORWARDED_CHANNELS)[C]]['params']
+    ? true
+    : C;
+}[ForwardedChannel];
+const _forwardedInputsMatch: ForwardedInputsMatch = true;
+void _forwardedInputsMatch;
 
 // Compile-time checks that the zod-free channel lists match the typed contract.
 type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;

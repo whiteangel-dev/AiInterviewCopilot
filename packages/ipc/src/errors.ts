@@ -14,6 +14,11 @@ export const ERROR_CODES = [
   'db_unlock_failed',
   'db_newer_than_app',
   'timeout',
+  'cancelled',
+  'not_found',
+  'unsupported_file',
+  'file_too_large',
+  'ai_output_invalid',
   'internal',
 ] as const;
 
@@ -26,11 +31,14 @@ export interface SerializedError {
 
 export class AppError extends Error {
   readonly code: ErrorCode;
+  /** A temporary failure (server error, network blip) worth retrying. Not serialized. */
+  readonly retryable: boolean;
 
-  constructor(code: ErrorCode, message: string, options?: ErrorOptions) {
+  constructor(code: ErrorCode, message: string, options?: ErrorOptions & { retryable?: boolean }) {
     super(message, options);
     this.name = 'AppError';
     this.code = code;
+    this.retryable = options?.retryable ?? false;
   }
 
   toJSON(): SerializedError {

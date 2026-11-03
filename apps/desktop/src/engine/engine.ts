@@ -7,14 +7,15 @@ import {
   registerSecret,
   unregisterSecret,
   verifyApiKey,
-  type AiProvider,
   type Logger,
 } from '@aic/core';
 import {
+  AnswerRepository,
+  KnowledgeRepository,
   openDatabase,
+  ProfileRepository,
   ProviderConfigRepository,
   SettingsRepository,
-  type AppDatabase,
 } from '@aic/db';
 import {
   AppError,
@@ -26,19 +27,15 @@ import {
   type ModelInfo,
   type ProviderId,
   type RpcHandlers,
-  type Settings,
 } from '@aic/ipc';
+import { answerHandlers } from './answers';
+import type { EngineContext, Ready } from './context';
+import { Jobs } from './jobs';
+import { knowledgeHandlers } from './knowledge';
+import { profileHandlers } from './profiles';
 
 /** Cached model lists older than this are refreshed on the next request. */
 const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-
-interface Ready {
-  db: AppDatabase;
-  settingsRepo: SettingsRepository;
-  providerRepo: ProviderConfigRepository;
-  settings: Settings;
-  providers: Record<ProviderId, AiProvider>;
-}
 
 export interface EngineDeps {
   emit<K extends keyof EngineEvents>(event: K, data: EngineEvents[K]): void;
@@ -46,6 +43,14 @@ export interface EngineDeps {
   exit(code: number): void;
   /** Log to stderr as well as the file (development). */
   logToConsole: boolean;
+  /** Today's date (YYYY-MM-DD); defaults to the local date. */
+  today?: () => string;
+}
+
+function localDate(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /**
@@ -91,7 +96,23 @@ export function createEngine(deps: EngineDeps): {
     return status;
   };
 
+  const jobs = new Jobs((progress) => deps.emit('job.progress', progress));
+  const ctx: EngineContext = {
+    ready,
+    requireKey,
+    emit: (event, data) => deps.emit(event, data),
+    log: () => log,
+    jobs,
+    today: deps.today ?? localDate,
+  };
+
   const handlers: RpcHandlers<EngineMethods> = {
+    ...profileHandlers(ctx),
+    ...knowledgeHandlers(ctx),
+    ...answerHandlers(ctx),
+
+    'jobs.cancel': ({ jobId }) => jobs.cancel(jobId),
+
     init(params) {
       if (state) throw new AppError('internal', 'The engine is already initialized.');
       log.close();
@@ -112,6 +133,9 @@ export function createEngine(deps: EngineDeps): {
         db,
         settingsRepo,
         providerRepo: new ProviderConfigRepository(db.db),
+        profiles: new ProfileRepository(db.db),
+        knowledge: new KnowledgeRepository(db.db),
+        answers: new AnswerRepository(db.db),
         settings: settingsRepo.load(),
         providers: { gemini: params.fakeProvider ? new FakeProvider() : new GeminiProvider() },
       };

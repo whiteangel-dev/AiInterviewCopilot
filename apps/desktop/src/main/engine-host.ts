@@ -48,6 +48,7 @@ export class EngineHost {
     status: [EngineStatus];
     'settings.changed': [EngineEvents['settings.changed']];
     'apiKey.changed': [EngineEvents['apiKey.changed']];
+    'job.progress': [EngineEvents['job.progress']];
   }>();
 
   #status: EngineStatus = { state: 'starting', error: null, restarts: 0, schemaVersion: null };
@@ -75,6 +76,24 @@ export class EngineHost {
   ): Promise<EngineMethods[K]['result']> {
     const client = await this.#whenReady();
     return client.call(method, ...args);
+  }
+
+  /**
+   * Calls a method chosen at runtime (generic IPC forwarding). The caller must
+   * have validated `params` for `method` (see FORWARDED_CHANNELS).
+   */
+  async forward(
+    method: keyof EngineMethods,
+    params: unknown,
+    options?: CallOptions,
+  ): Promise<unknown> {
+    const client = await this.#whenReady();
+    const call = client.call.bind(client) as (
+      m: string,
+      p: unknown,
+      o?: CallOptions,
+    ) => Promise<unknown>;
+    return call(method, params, options);
   }
 
   /** Stops the engine gracefully (closing the database), then kills it if needed. */
@@ -175,6 +194,7 @@ export class EngineHost {
     const client: Client = new RpcClient(endpoint, { timeoutMs: 15_000 });
     client.on('settings.changed', (s) => this.events.emit('settings.changed', s));
     client.on('apiKey.changed', (s) => this.events.emit('apiKey.changed', s));
+    client.on('job.progress', (p) => this.events.emit('job.progress', p));
 
     this.#child = child;
     this.#client = client;

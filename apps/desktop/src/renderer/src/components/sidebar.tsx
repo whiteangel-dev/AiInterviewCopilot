@@ -1,10 +1,20 @@
-import { House, Settings, type LucideIcon } from 'lucide-react';
+import {
+  FileText,
+  House,
+  MessageSquareQuote,
+  NotebookPen,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useApp, type Page } from '../store';
 import { Logo } from './logo';
 
 const NAV: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: 'home', label: 'Home', icon: House },
+  { page: 'profiles', label: 'Profiles', icon: FileText },
+  { page: 'knowledge', label: 'Knowledge', icon: NotebookPen },
+  { page: 'answers', label: 'Answer bank', icon: MessageSquareQuote },
   { page: 'settings', label: 'Settings', icon: Settings },
 ];
 

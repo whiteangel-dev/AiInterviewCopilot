@@ -29,7 +29,8 @@ const ROLE_TEXT: Record<ModelRole, { label: string; description: string }> = {
   },
   preparation: {
     label: 'Preparation',
-    description: 'Reads your resume and notes before the interview.',
+    description:
+      'Analyzes your resume, reviews your notes, and drafts the answer bank. Accuracy matters more than speed here.',
   },
 };
 

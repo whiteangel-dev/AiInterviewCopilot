@@ -126,6 +126,7 @@ async function main(): Promise<void> {
 
   host.events.on('status', (status) => broadcast('engine:status', status));
   host.events.on('apiKey.changed', (status) => broadcast('apiKey:changed', status));
+  host.events.on('job.progress', (progress) => broadcast('job:progress', progress));
   host.events.on('settings.changed', (settings) => {
     applyTheme(settings.appearance.theme);
     cacheTheme(paths.uiCache, settings.appearance.theme);

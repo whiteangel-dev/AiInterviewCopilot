@@ -68,6 +68,8 @@ export function openDatabase(options: OpenDatabaseOptions): AppDatabase {
     sqlite.pragma('journal_mode = WAL');
     sqlite.pragma('synchronous = NORMAL');
     sqlite.pragma('foreign_keys = ON');
+    // Overwrite deleted content (deleted resumes and notes don't linger in free pages).
+    sqlite.pragma('secure_delete = ON');
     sqlite.pragma('busy_timeout = 5000');
 
     const from = schemaVersion(sqlite);

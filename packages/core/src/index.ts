@@ -1,3 +1,7 @@
+export * from './ai/generate-object';
+export * from './answers/match';
+export * from './documents/extract';
+export * from './documents/quotes';
 export * from './logger';
 export * from './models';
 export * from './providers/errors';

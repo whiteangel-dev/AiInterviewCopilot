@@ -15,11 +15,44 @@ export const INVOKE_CHANNELS = [
   'apiKey:verify',
   'apiKey:remove',
   'models:list',
+  // Forwarded to the engine as-is (see FORWARDED_CHANNELS in contract.ts).
+  'jobs:cancel',
+  'profiles:list',
+  'profiles:get',
+  'profiles:import',
+  'profiles:reanalyze',
+  'profiles:saveVersion',
+  'profiles:restoreVersion',
+  'profiles:rename',
+  'profiles:delete',
+  'profiles:resumeText',
+  'knowledge:listBases',
+  'knowledge:getBase',
+  'knowledge:createBase',
+  'knowledge:updateBase',
+  'knowledge:deleteBase',
+  'knowledge:addItems',
+  'knowledge:updateItem',
+  'knowledge:deleteItem',
+  'knowledge:analyze',
+  'knowledge:splitNotes',
+  'context:preview',
+  'answers:list',
+  'answers:generate',
+  'answers:add',
+  'answers:update',
+  'answers:delete',
+  'answers:match',
 ] as const;
 
 export type InvokeChannel = (typeof INVOKE_CHANNELS)[number];
 
-export const EVENT_CHANNELS = ['engine:status', 'settings:changed', 'apiKey:changed'] as const;
+export const EVENT_CHANNELS = [
+  'engine:status',
+  'settings:changed',
+  'apiKey:changed',
+  'job:progress',
+] as const;
 
 export type EventChannel = (typeof EVENT_CHANNELS)[number];
 

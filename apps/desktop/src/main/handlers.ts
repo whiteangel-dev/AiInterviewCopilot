@@ -1,7 +1,15 @@
 import { rmSync } from 'node:fs';
 import { app, shell } from 'electron';
 import type { Logger } from '@aic/core';
-import { AppError, PROVIDERS, apiKeySecretRef, type AppInfo } from '@aic/ipc';
+import {
+  AppError,
+  FORWARDED_CHANNELS,
+  LONG_RUNNING_CHANNELS,
+  PROVIDERS,
+  apiKeySecretRef,
+  type AppInfo,
+  type ForwardedChannel,
+} from '@aic/ipc';
 import type { EngineHost } from './engine-host';
 import { broadcast, type InvokeHandlers } from './ipc';
 import type { AppPaths } from './paths';
@@ -16,9 +24,27 @@ interface Context {
 
 /** Network calls to the provider can be slow; allow more than the default RPC timeout. */
 const PROVIDER_CALL = { timeoutMs: 30_000 };
+/** AI jobs (resume analysis, answer bank) can take minutes. */
+const AI_JOB_CALL = { timeoutMs: 6 * 60_000 };
+
+/** Channels main passes straight to the engine (input already validated by zod). */
+function forwardedHandlers(host: EngineHost): Pick<InvokeHandlers, ForwardedChannel> {
+  const entries = (Object.keys(FORWARDED_CHANNELS) as ForwardedChannel[]).map((channel) => [
+    channel,
+    (input: unknown) =>
+      host.forward(
+        FORWARDED_CHANNELS[channel],
+        input,
+        LONG_RUNNING_CHANNELS.has(channel) ? AI_JOB_CALL : PROVIDER_CALL,
+      ),
+  ]);
+  return Object.fromEntries(entries) as Pick<InvokeHandlers, ForwardedChannel>;
+}
 
 export function createInvokeHandlers({ host, secrets, paths, log }: Context): InvokeHandlers {
   return {
+    ...forwardedHandlers(host),
+
     'app:getInfo': (): AppInfo => ({
       name: app.getName(),
       version: app.getVersion(),

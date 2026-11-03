@@ -1,6 +1,6 @@
 # AI Interview Copilot — Architecture
 
-**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)). Individual decisions are recorded in [docs/adr/](adr/).
+**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)). Individual decisions are recorded in [docs/adr/](adr/).
 
 A Windows-first (macOS later) desktop app. It listens to a live job interview, detects the interviewer's questions, and streams short, natural answers grounded in the candidate's resume and their own notes ("Application Knowledge"). English-only.
 
@@ -106,17 +106,23 @@ Use only Gemini's automatic (implicit) caching: explicit caches *increased* late
 
 ## 6. Preparation pipeline (not latency-sensitive)
 
+Built in Phase 2; details in [ADR 0008](adr/0008-preparation-pipeline.md).
+
 - **Resume:**
   - import PDF or DOCX;
   - extract text locally;
-  - the model reads the PDF directly for structured extraction against a fixed `CandidateProfile` schema, with a supporting quote for each field;
-  - you review and edit; the result is saved as a profile version and compiled into a token-efficient **Candidate Brief**.
+  - the model reads the PDF directly (Word files as text) for structured extraction against a fixed `CandidateProfile` schema, with a verbatim quote for each statement;
+  - quotes are checked locally (numbers must match exactly), and unverified statements are flagged;
+  - you review and edit; the result is saved as an immutable profile version and compiled deterministically into a token-efficient **Candidate Brief**.
 - **Application Knowledge:**
-  - items are *facts* or *instructions*;
-  - analysis finds duplicates and conflicts with the resume;
-  - compiled into answer rules plus facts;
+  - items are *facts* or *instructions*, in 8 categories;
+  - AI can split pasted notes into items, and review them for duplicates, conflicts with the resume, unclear notes and risky instructions;
+  - compiled deterministically into answer rules plus facts;
   - grouped into knowledge bases that can be selected per session.
-- **Answer bank:** drafts for common and role-specific questions, approved by the user, matched locally for instant answers.
+- **Answer bank:**
+  - drafts for common and role-specific questions, approved by the user;
+  - matched locally (lexical, with phrasing variants) for instant answers.
+- **Model:** the preparation role (default `gemini-3.1-pro-preview`). Temporary failures are retried; long jobs show progress and can be cancelled.
 
 ## 7. Data (SQLite, local, encrypted)
 
@@ -124,12 +130,12 @@ Use only Gemini's automatic (implicit) caching: explicit caches *increased* late
 |---|---|
 | Profiles | `profiles`, `resume_documents`, `profile_versions` (immutable JSON + compiled brief) |
 | Knowledge | `knowledge_bases`, `knowledge_items` (fact/instruction), `knowledge_compilations` (snapshot) |
-| Search | `context_chunks` + FTS5 + sqlite-vec |
+| Search | `context_chunks` + FTS5 + sqlite-vec, if retrieval is needed (Phase 4; the whole brief and knowledge currently fit in the prompt) |
 | Answer bank | `prepared_answers` |
 | Sessions | `sessions` (pins profile version), `session_knowledge` (pins snapshots), `transcript_segments` (final only), `questions`, `answers` (tokens, time to first token, model), `latency_events` |
 | Settings | `provider_configs` (key *reference* and last 4 characters only; cached model list), `app_settings` (one row per section) |
 
-IDs are UUIDv7. User content is soft-deleted, and "delete my data" removes it permanently. The schema version is `PRAGMA user_version`. An existing database is backed up (still encrypted) before migrating, and a database from a newer app version is refused.
+IDs are UUIDv7. Deleting a profile or knowledge base removes everything under it, and `secure_delete` overwrites the freed pages. Sessions (Phase 3) will keep a snapshot of the context they used. "Delete my data" removes everything. The schema version is `PRAGMA user_version`. An existing database is backed up (still encrypted) before migrating, and a database from a newer app version is refused.
 
 The database key is 256 random bits created on first run and kept in main's secret store (`secrets.json`, each entry encrypted with `safeStorage`). If it can't be read (for example, the data was copied to another Windows account), the app offers to start fresh instead of failing silently.
 
@@ -152,12 +158,12 @@ apps/desktop/        Electron app: src/{main,preload,engine,renderer}, e2e/, ele
 packages/ipc/        contracts: IPC channels, settings schema, engine RPC, errors (Zod)
 packages/core/       engine logic without Electron: AI providers, model roles, logging, redaction
 packages/db/         schema, generated migrations (drizzle/), repositories
+packages/prompts/    versioned prompts, model output schemas, brief and knowledge compilers
 docs/                architecture, ADRs, phase reports, release process
 spikes/              Phase 0 benchmarks and the native audio module (kept as reference)
 ```
 
 Still to come:
-- `packages/prompts/`: versioned prompts and JSON schemas (Phase 2/4).
 - `packages/native-audio/`: moves from `spikes/native-audio` in Phase 3.
 - `evals/`: Phase 4.
 
@@ -167,8 +173,8 @@ Still to come:
 |---|---|---|
 | 0 | Speed spikes, provider choices, native audio module, end-to-end prototype | **Done** (real-device Windows capture test moves to Phase 3) |
 | 1 | Electron app foundation, monorepo, encrypted database, keychain, settings, CI with Windows builds | **Done** ([summary](phase1/summary.md)); signing waits for a certificate |
-| 2 | Resume import and extraction, Application Knowledge, answer bank | Next |
-| 3 | Audio capture on real devices, live transcription, copilot window, hotkeys | |
+| 2 | Resume import and extraction, Application Knowledge, answer bank | **Done** ([summary](phase2/summary.md)) |
+| 3 | Audio capture on real devices, live transcription, copilot window, hotkeys | Next |
 | 4 | Turn detection + answer generation (**Windows MVP**) | |
 | 5 | Speed and quality hardening: fact check, echo cancellation, provider failover | |
 | 6 | Windows commercial release: onboarding, updates, licensing, privacy | |

@@ -2,6 +2,8 @@ import type {
   ApiKeyStatus,
   AppInfo,
   EngineStatus,
+  KnowledgeBaseSummary,
+  ProfileSummary,
   SerializedError,
   Settings,
   SettingsPatch,
@@ -11,7 +13,15 @@ import { create } from 'zustand';
 import { invoke, on } from './lib/api';
 import { errorMessage } from './lib/utils';
 
-export type Page = 'home' | 'settings';
+export type Page = 'home' | 'profiles' | 'knowledge' | 'answers' | 'settings';
+
+export interface NavigateOptions {
+  /** Settings section to scroll to. */
+  section?: string;
+  /** Open this profile (Profiles page) or select it (Answer bank). */
+  profileId?: string | null;
+  baseId?: string | null;
+}
 
 export interface Toast {
   id: number;
@@ -23,6 +33,14 @@ interface AppState {
   page: Page;
   /** Settings section to scroll to after navigating. */
   focusSection: string | null;
+  /** Open profile on the Profiles page (null: the list). */
+  profileId: string | null;
+  /** Selected knowledge base. */
+  baseId: string | null;
+  /** Profile the Answer bank shows. */
+  answersProfileId: string | null;
+  profiles: ProfileSummary[] | null;
+  bases: KnowledgeBaseSummary[] | null;
   info: AppInfo | null;
   engine: EngineStatus | null;
   settings: Settings | null;
@@ -31,7 +49,11 @@ interface AppState {
   fatal: SerializedError | null;
   toasts: Toast[];
 
-  navigate: (page: Page, section?: string) => void;
+  navigate: (page: Page, options?: NavigateOptions) => void;
+  refreshProfiles: () => Promise<void>;
+  refreshBases: () => Promise<void>;
+  selectBase: (baseId: string | null) => void;
+  selectAnswersProfile: (profileId: string | null) => void;
   clearFocusSection: () => void;
   boot: () => Promise<void>;
   reload: () => Promise<void>;
@@ -47,6 +69,11 @@ let subscribed = false;
 export const useApp = create<AppState>()((set, get) => ({
   page: 'home',
   focusSection: null,
+  profileId: null,
+  baseId: null,
+  answersProfileId: null,
+  profiles: null,
+  bases: null,
   info: null,
   engine: null,
   settings: null,
@@ -54,7 +81,40 @@ export const useApp = create<AppState>()((set, get) => ({
   fatal: null,
   toasts: [],
 
-  navigate: (page, section) => set({ page, focusSection: section ?? null }),
+  navigate: (page, options = {}) =>
+    set({
+      page,
+      focusSection: options.section ?? null,
+      ...(page === 'profiles' ? { profileId: options.profileId ?? null } : {}),
+      ...(page === 'answers' && options.profileId !== undefined
+        ? { answersProfileId: options.profileId }
+        : {}),
+      ...(options.baseId !== undefined ? { baseId: options.baseId } : {}),
+    }),
+
+  async refreshProfiles() {
+    try {
+      set({ profiles: await invoke('profiles:list') });
+    } catch (err) {
+      get().toast('error', `Couldn't load profiles: ${errorMessage(err)}`);
+    }
+  },
+
+  async refreshBases() {
+    try {
+      const bases = await invoke('knowledge:listBases');
+      const current = get().baseId;
+      set({
+        bases,
+        baseId: current && bases.some((b) => b.id === current) ? current : (bases[0]?.id ?? null),
+      });
+    } catch (err) {
+      get().toast('error', `Couldn't load knowledge: ${errorMessage(err)}`);
+    }
+  },
+
+  selectBase: (baseId) => set({ baseId }),
+  selectAnswersProfile: (answersProfileId) => set({ answersProfileId }),
   clearFocusSection: () => set({ focusSection: null }),
 
   async boot() {
@@ -80,6 +140,7 @@ export const useApp = create<AppState>()((set, get) => ({
         invoke('apiKey:getStatus', { provider: 'gemini' }),
       ]);
       set({ settings, apiKey, fatal: null });
+      await Promise.all([get().refreshProfiles(), get().refreshBases()]);
     } catch (err) {
       const error = AppError.from(err);
       if (error.code === 'engine_unavailable' && get().engine?.state !== 'failed') return;

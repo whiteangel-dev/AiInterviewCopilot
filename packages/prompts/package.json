@@ -1,0 +1,18 @@
+{
+  "name": "@aic/prompts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Versioned prompts, model output schemas, and the compilers that turn profiles and notes into prompt context.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@aic/ipc": "*",
+    "zod": "^4.6.7"
+  }
+}

@@ -15,7 +15,11 @@ describe('GeminiProvider.toAppError', () => {
     ).toBe('invalid_api_key');
     expect(provider.toAppError(apiError(403, 'PERMISSION_DENIED')).code).toBe('invalid_api_key');
     expect(provider.toAppError(apiError(429, 'RESOURCE_EXHAUSTED')).code).toBe('quota');
-    expect(provider.toAppError(apiError(503, 'UNAVAILABLE')).code).toBe('provider_error');
+    expect(provider.toAppError(apiError(503, 'UNAVAILABLE'))).toMatchObject({
+      code: 'provider_error',
+      retryable: true,
+    });
+    expect(provider.toAppError(apiError(429, 'RESOURCE_EXHAUSTED')).retryable).toBe(false);
     expect(provider.toAppError(apiError(400, 'Invalid argument')).code).toBe('provider_error');
   });
 

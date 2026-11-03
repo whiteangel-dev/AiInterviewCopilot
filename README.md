@@ -8,7 +8,8 @@ A desktop app (Windows first, macOS later) that listens to a live job interview 
 |---|---|---|
 | 0 | Technical validation: last word → first answer word in **~1.0 s median** | Done ([results](docs/phase0/results.md)) |
 | 1 | App foundation: Electron app, encrypted database, OS-protected keys, settings, Windows installer in CI | Done ([summary](docs/phase1/summary.md)) |
-| 2 | Resume import, Application Knowledge, answer bank | Next |
+| 2 | Resume import, Application Knowledge, answer bank | Done ([summary](docs/phase2/summary.md)) |
+| 3 | Real-device audio capture, live transcription, copilot window | Next |
 
 ## Docs
 
@@ -22,8 +23,9 @@ A desktop app (Windows first, macOS later) that listens to a live job interview 
 |---|---|
 | `apps/desktop/` | The Electron app: `src/main` (windows, secrets, IPC), `src/engine` (utility process: database, AI), `src/preload`, `src/renderer` (React UI), `e2e/` (Playwright) |
 | `packages/ipc/` | Contracts between processes: IPC channels, settings schema, engine RPC, errors |
-| `packages/core/` | Engine logic without Electron: Gemini provider, model roles, logging, secret redaction |
+| `packages/core/` | Engine logic without Electron: Gemini provider, resume text extraction and quote checking, answer matching, logging, redaction |
 | `packages/db/` | Encrypted SQLite: schema, migrations, repositories |
+| `packages/prompts/` | Versioned prompts, model output schemas, Candidate Brief and knowledge compilers |
 | `spikes/` | Phase 0 benchmarks and the Rust (napi-rs) WASAPI capture module |
 | `docs/` | Architecture, ADRs, phase reports, release process |
 
@@ -42,6 +44,8 @@ npm run check          # lint + format + typecheck + unit tests (what CI runs fi
 **Other commands:**
 - `npm run db:generate`: after changing `packages/db/src/schema.ts`, writes a new SQL migration. Commit it.
 - `npm run dist:win`: Windows installer. See [docs/release.md](docs/release.md).
+
+**Live AI tests** (real Gemini, a few cents): `AIC_LIVE_TESTS=1 npx vitest run apps/desktop/src/engine/live.test.ts` runs the whole preparation pipeline.
 
 **Gemini key:** you enter it in the app under **Settings → Gemini API key**, and the app keeps it encrypted by the OS. For the Phase 0 benchmarks and the opt-in live tests (`AIC_LIVE_TESTS=1 npm test`), put it in `.env.local`:
 

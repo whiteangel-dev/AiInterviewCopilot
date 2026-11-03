@@ -1,5 +1,6 @@
 import { AppError, type ModelInfo } from '@aic/ipc';
-import type { AiProvider } from './types';
+import { fakeStructuredReply } from './fake-responses';
+import type { AiProvider, StructuredRequest, StructuredResponse } from './types';
 
 const model = (id: string, kind: ModelInfo['kind']): ModelInfo => ({
   id,
@@ -34,6 +35,32 @@ export class FakeProvider implements AiProvider {
       return Promise.reject(new AppError('network', "Couldn't reach Google."));
     }
     return Promise.resolve(structuredClone(FAKE_MODELS));
+  }
+
+  /** Replies after `delayMs` (default 50 ms), so progress and cancel paths run. */
+  constructor(private readonly delayMs = Number(process.env.AIC_FAKE_DELAY_MS ?? 50)) {}
+
+  async generateStructured(req: StructuredRequest): Promise<StructuredResponse> {
+    if (req.apiKey.includes('INVALID'))
+      throw new AppError('invalid_api_key', 'Google rejected this API key.');
+    const started = Date.now();
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, this.delayMs);
+      req.signal?.addEventListener('abort', () => {
+        clearTimeout(timer);
+        reject(new AppError('cancelled', 'Cancelled.'));
+      });
+    });
+    const input = req.parts.map((p) => ('text' in p ? p.text : '')).join('\n');
+    const text = JSON.stringify(fakeStructuredReply(req.task, input));
+    req.onProgress?.(text.length);
+    return {
+      text,
+      model: req.model,
+      inputTokens: Math.ceil(input.length / 4),
+      outputTokens: Math.ceil(text.length / 4),
+      durationMs: Date.now() - started,
+    };
   }
 
   toAppError(err: unknown): AppError {

@@ -30,8 +30,12 @@ interface Step {
 
 export function HomePage() {
   const apiKey = useApp((s) => s.apiKey);
+  const profiles = useApp((s) => s.profiles) ?? [];
+  const bases = useApp((s) => s.bases) ?? [];
   const navigate = useApp((s) => s.navigate);
   const connected = !!apiKey?.configured && apiKey.verification !== 'invalid';
+  const notes = bases.reduce((n, b) => n + b.itemCount, 0);
+  const toReview = profiles.reduce((n, p) => n + p.unverifiedCount, 0);
 
   const steps: Step[] = [
     {
@@ -42,7 +46,7 @@ export function HomePage() {
         : 'Add your Google Gemini API key. It powers transcription and answers.',
       done: connected,
       action: !connected && (
-        <Button size="sm" onClick={() => navigate('settings', 'api-key')}>
+        <Button size="sm" onClick={() => navigate('settings', { section: 'api-key' })}>
           {apiKey?.configured ? 'Fix API key' : 'Add API key'} <ArrowRight aria-hidden />
         </Button>
       ),
@@ -50,16 +54,50 @@ export function HomePage() {
     {
       icon: FileText,
       title: 'Import your resume',
-      description: 'Upload a PDF or Word file and review what was extracted.',
-      done: false,
-      upcoming: true,
+      description:
+        profiles.length === 0
+          ? 'Upload a PDF or Word file and review what was extracted.'
+          : toReview > 0
+            ? `${toReview} statement${toReview === 1 ? '' : 's'} in your profile need${toReview === 1 ? 's' : ''} a quick review.`
+            : `${profiles.length} profile${profiles.length === 1 ? '' : 's'} ready.`,
+      done: profiles.length > 0,
+      action:
+        profiles.length === 0 ? (
+          <Button
+            size="sm"
+            variant={connected ? 'primary' : 'secondary'}
+            onClick={() => navigate('profiles')}
+          >
+            Import resume <ArrowRight aria-hidden />
+          </Button>
+        ) : toReview > 0 ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() =>
+              navigate('profiles', {
+                profileId: profiles.find((p) => p.unverifiedCount > 0)?.id ?? null,
+              })
+            }
+          >
+            Review
+          </Button>
+        ) : undefined,
     },
     {
       icon: NotebookPen,
       title: 'Add application knowledge',
-      description: 'Notes, facts and instructions the answers should follow.',
-      done: false,
-      upcoming: true,
+      description:
+        notes > 0
+          ? `${notes} note${notes === 1 ? '' : 's'} saved. Prepare answers in the Answer bank when you're ready.`
+          : 'Project stories, salary expectations, how you like to answer. Anything missing from your resume.',
+      done: notes > 0,
+      action:
+        notes === 0 ? (
+          <Button size="sm" variant="secondary" onClick={() => navigate('knowledge')}>
+            Add notes <ArrowRight aria-hidden />
+          </Button>
+        ) : undefined,
     },
     {
       icon: Radio,

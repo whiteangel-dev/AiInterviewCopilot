@@ -1,5 +1,16 @@
-import type { KeyVerificationOutcome, ModelInfo } from '@aic/ipc';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import type {
+  AnswerCategory,
+  CandidateProfile,
+  DocumentKind,
+  KeyVerificationOutcome,
+  KnowledgeAnalysis,
+  KnowledgeCategory,
+  KnowledgeKind,
+  ModelInfo,
+  ProfileVersionOrigin,
+  TextQuality,
+} from '@aic/ipc';
+import { blob, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /** Timestamps are epoch milliseconds. IDs are UUIDv7. */
 
@@ -32,3 +43,134 @@ export const providerConfigs = sqliteTable('provider_configs', {
 });
 
 export type ProviderConfigRow = typeof providerConfigs.$inferSelect;
+
+// ── Profiles (Phase 2) ──────────────────────────────────────────────────────
+
+export const profiles = sqliteTable('profiles', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** The imported resume file (kept so it can be re-analyzed) and its extracted text. */
+export const resumeDocuments = sqliteTable(
+  'resume_documents',
+  {
+    id: text('id').primaryKey(),
+    profileId: text('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    fileName: text('file_name').notNull(),
+    kind: text('kind').$type<DocumentKind>().notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    sha256: text('sha256').notNull(),
+    content: blob('content', { mode: 'buffer' }).notNull(),
+    text: text('text').notNull(),
+    pageCount: integer('page_count'),
+    textQuality: text('text_quality').$type<TextQuality>().notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('resume_documents_profile_idx').on(t.profileId)],
+);
+
+/** Immutable. The highest version is the current profile. */
+export const profileVersions = sqliteTable(
+  'profile_versions',
+  {
+    id: text('id').primaryKey(),
+    profileId: text('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    version: integer('version').notNull(),
+    origin: text('origin').$type<ProfileVersionOrigin>().notNull(),
+    documentId: text('document_id').references(() => resumeDocuments.id, { onDelete: 'set null' }),
+    data: text('data', { mode: 'json' }).$type<CandidateProfile>().notNull(),
+    brief: text('brief').notNull(),
+    model: text('model'),
+    promptVersion: text('prompt_version'),
+    durationMs: integer('duration_ms'),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [uniqueIndex('profile_versions_profile_version_unique').on(t.profileId, t.version)],
+);
+
+// ── Application Knowledge (Phase 2) ─────────────────────────────────────────
+
+export const knowledgeBases = sqliteTable('knowledge_bases', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+export const knowledgeItems = sqliteTable(
+  'knowledge_items',
+  {
+    id: text('id').primaryKey(),
+    baseId: text('base_id')
+      .notNull()
+      .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
+    kind: text('kind').$type<KnowledgeKind>().notNull(),
+    category: text('category').$type<KnowledgeCategory>().notNull(),
+    title: text('title').notNull().default(''),
+    content: text('content').notNull(),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('knowledge_items_base_idx').on(t.baseId)],
+);
+
+export type StoredKnowledgeAnalysis = Pick<KnowledgeAnalysis, 'summary' | 'issues' | 'reclassify'>;
+
+export const knowledgeAnalyses = sqliteTable(
+  'knowledge_analyses',
+  {
+    id: text('id').primaryKey(),
+    baseId: text('base_id')
+      .notNull()
+      .references(() => knowledgeBases.id, { onDelete: 'cascade' }),
+    profileId: text('profile_id').references(() => profiles.id, { onDelete: 'set null' }),
+    /** Hash of the items analyzed, to tell when the analysis is out of date. */
+    itemsHash: text('items_hash').notNull(),
+    result: text('result', { mode: 'json' }).$type<StoredKnowledgeAnalysis>().notNull(),
+    model: text('model').notNull(),
+    promptVersion: text('prompt_version').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('knowledge_analyses_base_idx').on(t.baseId)],
+);
+
+// ── Answer bank (Phase 2) ───────────────────────────────────────────────────
+
+export const preparedAnswers = sqliteTable(
+  'prepared_answers',
+  {
+    id: text('id').primaryKey(),
+    profileId: text('profile_id')
+      .notNull()
+      .references(() => profiles.id, { onDelete: 'cascade' }),
+    question: text('question').notNull(),
+    variants: text('variants', { mode: 'json' }).$type<string[]>().notNull(),
+    category: text('category').$type<AnswerCategory>().notNull(),
+    answer: text('answer').notNull(),
+    status: text('status').$type<'draft' | 'approved'>().notNull(),
+    origin: text('origin').$type<'generated' | 'manual'>().notNull(),
+    model: text('model'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('prepared_answers_profile_idx').on(t.profileId)],
+);
+
+export type ProfileRow = typeof profiles.$inferSelect;
+export type ResumeDocumentRow = typeof resumeDocuments.$inferSelect;
+export type ProfileVersionRow = typeof profileVersions.$inferSelect;
+export type KnowledgeBaseRow = typeof knowledgeBases.$inferSelect;
+export type KnowledgeItemRow = typeof knowledgeItems.$inferSelect;
+export type KnowledgeAnalysisRow = typeof knowledgeAnalyses.$inferSelect;
+export type PreparedAnswerRow = typeof preparedAnswers.$inferSelect;

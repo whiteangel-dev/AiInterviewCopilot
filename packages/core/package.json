@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@aic/ipc": "*",
-    "@google/genai": "^2.32.0"
+    "@google/genai": "^2.32.0",
+    "fflate": "^0.8.3",
+    "unpdf": "~1.9.1",
+    "zod": "^4.6.7"
   }
 }
