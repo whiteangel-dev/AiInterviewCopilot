@@ -1,0 +1,13 @@
+{
+  "name": "aic-capture-spike",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Phase 0 Option A: Electron built-in microphone + system-audio (loopback) capture test",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "44.9.0"
+  }
+}

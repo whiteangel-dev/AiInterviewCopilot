@@ -1,0 +1,24 @@
+{
+  "name": "aic-phase0-spikes",
+  "private": true,
+  "type": "module",
+  "description": "Phase 0 latency spikes for AI Interview Copilot (throwaway harness; results feed ADRs)",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "models": "node --env-file-if-exists=../.env.local src/models.ts",
+    "gen-audio": "node --env-file-if-exists=../.env.local src/gen-audio.ts",
+    "bench:llm": "node --env-file-if-exists=../.env.local src/llm-latency.ts",
+    "bench:stt": "node --env-file-if-exists=../.env.local src/stt-latency.ts",
+    "test": "node --test src/lib/*.test.ts"
+  },
+  "dependencies": {
+    "@google/genai": "^2.32.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

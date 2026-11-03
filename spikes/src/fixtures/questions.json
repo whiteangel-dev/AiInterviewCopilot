@@ -1,0 +1,19 @@
+[
+  { "id": "q01", "kind": "answer", "type": "small_talk", "text": "Hi Jordan, thanks for joining. How's your day going so far?" },
+  { "id": "q02", "kind": "answer", "type": "background", "text": "So, to get started, can you tell me a little bit about yourself?" },
+  { "id": "q03", "kind": "answer", "type": "motivation", "text": "What made you interested in this role here at Kestrel Pay?" },
+  { "id": "q04", "kind": "skip", "type": "statement", "text": "Great, thanks. So just for context, our team is about twelve engineers split across two squads, and we mostly work in Go and TypeScript." },
+  { "id": "q05", "kind": "answer", "type": "behavioral", "text": "Tell me about a time you had to deal with a major production incident.", "candidateSaid": "Sure. The big one was Black Friday 2022 at Quayside. Consumer lag on our shipment events grew to about two hours, so customers weren't seeing tracking updates. I led the response, we rolled back a deploy and scaled up consumers, and we were caught up in about six hours." },
+  { "id": "q06", "kind": "answer", "type": "follow_up", "parent": "q05", "text": "And what was the actual root cause? What did you change afterward so it wouldn't happen again?" },
+  { "id": "q07", "kind": "answer", "type": "technical", "text": "Why did you pick Kafka over something like RabbitMQ for that pipeline?" },
+  { "id": "q08", "kind": "answer", "type": "technical", "text": "Have you worked with Kubernetes in production?" },
+  { "id": "q09", "kind": "answer", "type": "system_design", "text": "How would you design a rate limiter for a public API that handles around fifty thousand requests per second?" },
+  { "id": "q10", "kind": "answer", "type": "behavioral", "text": "Tell me about a disagreement you had with a teammate and how you handled it." },
+  { "id": "q11", "kind": "answer", "type": "technical", "text": "Can you walk me through how you'd debug a memory leak in a Node.js service, and how you'd keep it from happening again?", "candidateSaid": "I'd start by confirming it's a leak with memory graphs, then take heap snapshots a few minutes apart and compare them. At Tallgrass that's how I found an unbounded in-memory cache in the scheduling API." },
+  { "id": "q12", "kind": "answer", "type": "follow_up", "parent": "q11", "text": "Why not just give the service more memory and restart it on a schedule?" },
+  { "id": "q13", "kind": "answer", "type": "behavioral", "text": "What would you say is your biggest weakness?" },
+  { "id": "q14", "kind": "answer", "type": "salary", "text": "What are your salary expectations for this role?" },
+  { "id": "q15", "kind": "answer", "type": "career", "text": "Where do you see yourself in five years?" },
+  { "id": "q16", "kind": "skip", "type": "filler", "text": "Okay. Mm-hm. Let me just, uh, pull up my notes here." },
+  { "id": "q17", "kind": "answer", "type": "closing", "text": "We've got a few minutes left. Do you have any questions for us?" }
+]

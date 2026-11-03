@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob:; style-src 'self' 'unsafe-inline'" />
+    <title>AIC capture spike</title>
+    <style>
+      :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+      body { margin: 16px; max-width: 780px; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      .muted { opacity: 0.7; font-size: 13px; }
+      .row { display: flex; gap: 8px; align-items: center; margin: 12px 0; flex-wrap: wrap; }
+      button { padding: 6px 14px; font-size: 14px; }
+      .meter { margin: 10px 0; }
+      .bar { height: 14px; background: #8883; border-radius: 4px; overflow: hidden; }
+      .fill { height: 100%; width: 0%; background: #2a9d5c; transition: width 60ms linear; }
+      table { border-collapse: collapse; font-size: 13px; width: 100%; }
+      td, th { text-align: left; padding: 3px 8px; border-bottom: 1px solid #8883; }
+      pre { font-size: 12px; max-height: 160px; overflow: auto; background: #8881; padding: 8px; }
+    </style>
+  </head>
+  <body>
+    <h1>Capture spike — Option A (Electron built-in)</h1>
+    <div class="muted" id="sysinfo">…</div>
+
+    <div class="row">
+      <label>Microphone <select id="mic"></select></label>
+      <button id="start">Start</button>
+      <button id="stop" disabled>Stop &amp; save</button>
+      <span id="elapsed" class="muted"></span>
+    </div>
+
+    <div class="meter"><div>Interviewer — system audio (loopback) <span id="sysDb" class="muted"></span></div><div class="bar"><div class="fill" id="sysBar"></div></div></div>
+    <div class="meter"><div>You — microphone <span id="micDb" class="muted"></span></div><div class="bar"><div class="fill" id="micBar"></div></div></div>
+
+    <table id="stats"></table>
+    <pre id="log"></pre>
+    <p class="muted">Play audio (a YouTube interview or a Zoom/Teams/Meet test call) and speak into the mic. Run at least 2 minutes, then Stop &amp; save. WAVs and a JSON report go to the recordings folder.</p>
+    <script type="module" src="renderer.js"></script>
+  </body>
+</html>
