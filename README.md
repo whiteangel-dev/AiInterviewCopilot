@@ -36,7 +36,7 @@ A Windows app that listens to your job interview and, about a second after each 
 
 The app never shows them the key, but it can't make the key secret from them. Give each person their own key from Google AI Studio, and delete it when they're done.
 
-**Free keys:** everything the copilot does live works on Google's free tier, within its usage limits. A key with billing on is faster to prepare (it uses Google's strongest model) and has higher limits: about $0.57 per interview hour, estimated.
+**Free keys:** everything the copilot does live works on Google's free tier, within its usage limits. A key with billing on is faster to prepare (it uses Google's strongest model) and has higher limits: about $0.61 per interview hour, estimated.
 
 ## Status
 
@@ -53,10 +53,13 @@ The app never shows them the key, but it can't make the key secret from them. Gi
 | 8 | Phone as a second screen: answers on an iPhone or Android phone, in its browser (1.3.0) | Done ([summary](docs/phase8/summary.md)) |
 | 9–10 | macOS, phone-only listening | Next |
 
+**The full guide:** [How AI Interview Copilot works (PDF)](docs/AI-Interview-Copilot-Guide.pdf): setup, use during an interview, what happens inside, every setting, cost and fixing problems.
+
 ## For developers
 
 ### Docs
 
+- [How the app works (PDF guide)](docs/AI-Interview-Copilot-Guide.pdf)
 - [Architecture](docs/architecture.md)
 - [Decision records](docs/adr/)
 - [Building and releasing](docs/release.md)
