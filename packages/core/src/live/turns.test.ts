@@ -3,6 +3,8 @@ import {
   REPLY_NOT_TRANSCRIBED,
   TurnTaker,
   endsWithQuestion,
+  endsWithRequest,
+  sameWords,
   type AnalyzeInput,
   type AnswerUpdate,
   type BankAnswer,
@@ -107,20 +109,20 @@ describe('turn taking', () => {
   it('re-runs the attempt as the transcript catches up, and shows the answer the analyzer confirms', async () => {
     const h = harness();
     const start = h.say(1600);
-    h.interim('Tell me about', start);
+    h.interim("I'd like to hear about", start);
     // The pause started an attempt on the partial text.
     expect(h.analyses).toHaveLength(1);
-    expect(h.analyses[0]!.input.turn).toBe('Tell me about');
+    expect(h.analyses[0]!.input.turn).toBe("I'd like to hear about");
     expect(h.writes).toHaveLength(1);
 
     h.advance(400);
-    h.final('interviewer', 'Tell me about a time you failed.', start);
+    h.final('interviewer', "I'd like to hear about a time you failed.", start);
     // The fuller transcript cancels the first attempt and starts another.
     expect(h.analyses[0]!.signal.aborted).toBe(true);
     expect(h.writes[0]!.signal.aborted).toBe(true);
     expect(h.analyses).toHaveLength(2);
     expect(h.analyses[1]!.input).toEqual({
-      turn: 'Tell me about a time you failed.',
+      turn: "I'd like to hear about a time you failed.",
       history: [],
       longSilence: false,
     });
@@ -137,7 +139,7 @@ describe('turn taking', () => {
       status: 'streaming',
       source: 'generated',
       trigger: 'analyzer',
-      heard: 'Tell me about a time you failed.',
+      heard: "I'd like to hear about a time you failed.",
       // Last word at the pause minus 300 ms; shown 800 ms later.
       latencyMs: 800,
       model: 'flash-lite',
@@ -156,6 +158,33 @@ describe('turn taking', () => {
     });
     expect(h.updates.at(-1)!.update).toEqual({ final: true, shown: false, usage });
     expect(h.tt.stats).toMatchObject({ attempts: 2, cancelled: 1, answered: 1, withdrawn: 0 });
+  });
+
+  it('keeps the answer it started when the transcript only gains punctuation', () => {
+    const h = harness();
+    const start = h.say(1500);
+    h.interim('how is your day going', start);
+    expect(h.writes).toHaveLength(1);
+    h.writes[0]!.onText("It's going well.");
+    // The final version adds the question mark: same words, so no new request,
+    // and the "?" confirms the answer already on its way.
+    h.final('interviewer', 'How is your day going?', start);
+    expect(h.writes).toHaveLength(1);
+    expect(h.writes[0]!.signal.aborted).toBe(false);
+    expect(h.shown()[0]).toMatchObject({
+      trigger: 'question-mark',
+      heard: 'How is your day going?',
+      text: "It's going well.",
+    });
+    expect(h.tt.stats).toMatchObject({ attempts: 1, cancelled: 0 });
+
+    // New words still start over.
+    const g = harness();
+    const s2 = g.say(1500);
+    g.interim('tell me about', s2);
+    g.final('interviewer', 'Tell me about your last project.', s2);
+    expect(g.writes).toHaveLength(2);
+    expect(g.writes[0]!.signal.aborted).toBe(true);
   });
 
   it('shows a turn ending in "?" at once, and withdraws it if the analyzer disagrees', async () => {
@@ -426,6 +455,37 @@ describe('turn taking', () => {
     h.final('interviewer', 'Tell me more', a);
     h.analyses[0]!.onAction('wait');
     expect(h.phases).toEqual(['listening', 'idle', 'thinking', 'idle']);
+  });
+});
+
+describe('endsWithRequest', () => {
+  it('recognizes a finished request, not a lead-in or a statement', () => {
+    expect(
+      endsWithRequest('Tell me about a time you had to deal with a major production incident.'),
+    ).toBe(true);
+    expect(endsWithRequest('Great, thanks. So, walk me through your last project.')).toBe(true);
+    expect(endsWithRequest('Could you describe your role on the team.')).toBe(true);
+    expect(endsWithRequest('Tell me about a time when')).toBe(false);
+    expect(endsWithRequest('Tell me about a time when,')).toBe(false);
+    expect(endsWithRequest('So we use Go pretty heavily here.')).toBe(false);
+    expect(endsWithRequest('Tell me more.')).toBe(false);
+    expect(endsWithRequest('Describe it? No, wait.')).toBe(false);
+  });
+
+  it('shows a finished request as soon as the answer streams', () => {
+    const h = harness();
+    const a = h.say(1500);
+    h.final('interviewer', 'Tell me about a disagreement you had with a teammate.', a);
+    h.writes[0]!.onText('Sure.');
+    expect(h.shown()[0]).toMatchObject({ trigger: 'request' });
+  });
+});
+
+describe('sameWords', () => {
+  it('ignores case, punctuation and spacing only', () => {
+    expect(sameWords('how is your day going', 'How is your day going?')).toBe(true);
+    expect(sameWords("what's next", 'Whats next?')).toBe(true);
+    expect(sameWords('tell me about', 'Tell me about it.')).toBe(false);
   });
 });
 

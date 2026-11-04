@@ -46,7 +46,9 @@ The app never shows them the key, but it can't make the key secret from them. Gi
 | 3 | Live listening: audio capture, live transcription, copilot window, sessions, hotkeys | Done ([summary](docs/phase3/summary.md)); real-device test pending |
 | 4 | Live answers: turn detection, streamed answers, answer bank first, Answer now / regenerate | Done ([summary](docs/phase4/summary.md)); **~1.2 s median** from last word to first answer word with real Gemini |
 | 5 | Hardening: duplicate and backup requests, fact check, echo cancellation, speech-only transcription, cost per session | Done ([summary](docs/phase5/summary.md)); about **$0.57 per interview hour** on your key (estimated) |
-| 6 | Windows release: public downloads, automatic updates, first-run setup, free keys | Done ([summary](docs/phase6/summary.md)) |
+| 6 | Windows release: public downloads, automatic updates, first-run setup, free keys; key files (1.1.0) | Done ([summary](docs/phase6/summary.md)) |
+| 7 | Faster answers on Windows: **about 1.0 s** from the interviewer's last word | Done ([summary](docs/phase7/summary.md)) |
+| 8–10 | Phone as a second screen, macOS, phone-only listening | Next |
 
 ## For developers
 

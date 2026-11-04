@@ -171,6 +171,25 @@ describe('streamHedged', () => {
     forgetUnavailableModels();
   });
 
+  it('can race two requests from the start, and reports rate limits', async () => {
+    const { provider, calls } = scripted();
+    const p = streamHedged(
+      provider,
+      base(() => undefined),
+      {
+        hedgeAfterMs: 0,
+        fallbackModels: ['backup'],
+      },
+    );
+    vi.advanceTimersByTime(0);
+    expect(calls).toHaveLength(2);
+    calls[0]!.fail(new AppError('quota', 'Rate limited.'));
+    await flush();
+    calls[1]!.text('ok');
+    calls[1]!.done();
+    await expect(p).resolves.toMatchObject({ hedged: true, rateLimited: true });
+  });
+
   it('reports the error when nothing is left to try', async () => {
     const { provider, calls } = scripted();
     const p = streamHedged(

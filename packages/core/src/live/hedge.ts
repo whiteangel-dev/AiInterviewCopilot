@@ -32,6 +32,8 @@ export interface HedgedResponse extends TextStreamResponse {
   hedged: boolean;
   /** The answer came from a fallback model. */
   failedOver: boolean;
+  /** A request was refused for a rate limit (send fewer requests from now on). */
+  rateLimited: boolean;
 }
 
 /** Failures another request (or another model) may not have. */
@@ -74,6 +76,7 @@ export function streamHedged(
     let settled = false;
     let firstError: AppError | null = null;
     let failures = 0;
+    let rateLimited = false;
     let hedgeTimer: ReturnType<typeof setTimeout> | undefined;
 
     const finish = (fn: () => void) => {
@@ -94,6 +97,7 @@ export function streamHedged(
     const fail = (model: string, err: AppError) => {
       failures++;
       if (err.modelUnavailable) markModelUnavailable(model);
+      else if (err.code === 'quota') rateLimited = true;
       firstError ??= err;
       const next = isRetryableLiveError(err) ? fallbacks.shift() : undefined;
       if (next) start(next, 'fallback');
@@ -134,6 +138,7 @@ export function streamHedged(
                   requests: legs.length,
                   hedged: legs.some((l) => l.kind === 'hedge'),
                   failedOver: leg.kind === 'fallback',
+                  rateLimited,
                 }),
               );
             } else if (!winner) {

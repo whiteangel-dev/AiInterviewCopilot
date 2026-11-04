@@ -181,6 +181,33 @@ interface Attempt {
 
 const words = (text: string) => text.split(/\s+/).filter(Boolean).length;
 
+/**
+ * A finished request rather than a question: the last sentence starts like
+ * "Tell me about…", "Walk me through…", "Describe…" and ends with a period.
+ * Shown as fast as a "?" question; the analyzer can still withdraw it.
+ */
+const REQUEST_START =
+  /^(?:(?:so|okay|ok|alright|great|now|and|well|then)[,.]?\s+)*(?:(?:can|could|would) you\s+)?(?:please\s+)?(?:tell me|walk me through|talk me through|take me through|describe|explain|give me (?:an? |some )?(?:example|overview|sense|rundown)|share (?:an? |your |some )|help me understand)\b/i;
+
+export function endsWithRequest(text: string): boolean {
+  const t = text.trim();
+  if (!/\.["”')\]]*$/.test(t)) return false;
+  const sentences = t.match(/[^.?!]+[.?!]+["”')\]]*/g) ?? [t];
+  const last = sentences.at(-1)!.trim();
+  return REQUEST_START.test(last) && last.split(/\s+/).length >= 4;
+}
+
+/** The same words, ignoring case, punctuation and spacing. */
+export function sameWords(a: string, b: string): boolean {
+  const norm = (t: string) =>
+    t
+      .toLowerCase()
+      .replace(/[’']/g, '')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  return norm(a) === norm(b);
+}
+
 /** The "?" fast path: a turn that ends with a question mark is shown without waiting. */
 export function endsWithQuestion(text: string): boolean {
   return /\?["”')\]]*\s*$/.test(text);
@@ -499,6 +526,20 @@ export class TurnTaker {
     if (reason !== 'manual') {
       if (current?.confirmed) return false;
       if (reason !== 'fallback' && text === this.#lastAttemptText) return false;
+      // The transcript often only gains punctuation after the pause (the final
+      // version adds "?"). Same words: keep the answer already being written
+      // instead of starting over (Phase 7, saves a few hundred ms).
+      if (reason === 'update' && current && sameWords(text, current.text)) {
+        this.#lastAttemptText = text;
+        current.text = text;
+        if (endsWithQuestion(text) || endsWithRequest(text)) {
+          current.confirmed = true;
+          current.trigger = endsWithQuestion(text) ? 'question-mark' : 'request';
+          this.o.log?.('turn attempt kept', { n: current.n, fastPath: true });
+          this.#maybeShow(current);
+        }
+        return false;
+      }
     }
     this.#cancelAttempt('superseded');
     this.#lastAttemptText = text;
@@ -519,6 +560,9 @@ export class TurnTaker {
     } else if (endsWithQuestion(text)) {
       a.confirmed = true;
       a.trigger = 'question-mark';
+    } else if (endsWithRequest(text)) {
+      a.confirmed = true;
+      a.trigger = 'request';
     }
     this.#setPhase('thinking');
     this.o.log?.('turn attempt', {
@@ -526,7 +570,7 @@ export class TurnTaker {
       reason,
       words: words(text),
       bank: a.bank !== null,
-      fastPath: a.trigger === 'question-mark',
+      fastPath: a.trigger === 'question-mark' || a.trigger === 'request',
     });
 
     if (a.bank) {

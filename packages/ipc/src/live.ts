@@ -137,12 +137,14 @@ export type AnswerSource = 'bank' | 'generated';
 /**
  * What showed the answer:
  * - `question-mark`: the turn ended with "?" (shown at once; the analyzer can withdraw it);
+ * - `request`: the turn ended with a request like "Tell me about…" (likewise);
  * - `analyzer`: the turn analyzer decided the interviewer finished a question;
  * - `fallback`: the analyzer decided after more than a second of silence;
  * - `manual`: "Answer now";
  * - `regenerate`: "Regenerate", "Shorter" or "Longer".
  */
-export type AnswerTrigger = 'question-mark' | 'analyzer' | 'fallback' | 'manual' | 'regenerate';
+export type AnswerTrigger =
+  'question-mark' | 'request' | 'analyzer' | 'fallback' | 'manual' | 'regenerate';
 
 /**
  * `streaming` → `done`, or `error`, or `stopped` (the interview ended or was

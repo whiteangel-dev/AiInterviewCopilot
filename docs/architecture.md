@@ -9,7 +9,8 @@ A Windows-first (macOS later) desktop app. It listens to a live job interview, d
 1. **Speed.** First answer words on screen within 1.5 s (median) of the interviewer's last word. Measured:
    - Phase 0 prototype: 0.97 s median, 1.24 s at the 95th percentile;
    - the app (Phase 4, three runs): 1.15–1.36 s median, 1.44–1.87 s at the 95th percentile. The model's time to first token varied that day; the app's own part is ~0.5 s;
-   - with duplicate requests for slow responses (Phase 5): 1.23 s median, 1.46 s at the 95th percentile.
+   - with duplicate requests for slow responses (Phase 5): 1.23 s median, 1.46 s at the 95th percentile;
+   - racing two requests, keeping answers on punctuation-only changes, and a fast path for "Tell me about…" requests (Phase 7): **1.0 s median, 1.3 s at the 95th percentile** ([ADR 0014](adr/0014-faster-answers.md)).
 2. **Reliability during a live interview.** No crashes, automatic reconnection, graceful fallback.
 3. **Grounded answers.** Never invent experience; handle gaps honestly.
 4. **Low resource use.** Runs next to Zoom or Teams and a browser.
@@ -197,5 +198,8 @@ spikes/              Phase 0 benchmarks and fixtures (kept as reference)
 | 4 | Turn detection + answer generation (**Windows MVP**) | **Done** ([summary](phase4/summary.md)); real-interview tuning on a Windows PC |
 | 5 | Speed and quality hardening: fact check, echo cancellation, provider failover, cost per interview hour | **Done** ([summary](phase5/summary.md)); real-speaker test on a Windows PC; a second provider when a key is available |
 | 6 | Windows release: public downloads (GitHub Releases), automatic updates, first-run setup, free keys. Licensing and privacy work dropped by the owner: anyone can just use it | **Done** ([summary](phase6/summary.md)); signing waits for a certificate |
-| 7 | macOS | Next |
-| 8 | Practice mode, offline mode, analytics | |
+| 7 | Faster answers on Windows (the main platform) | **Done** ([summary](phase7/summary.md)) |
+| 8 | Phone as a second screen (iPhone and Android, in the phone's browser) | Next |
+| 9 | macOS | |
+| 10 | Phone-only listening (the phone's own microphone): iPhone and Android apps | |
+| 11 | Practice mode, offline mode, analytics | |
