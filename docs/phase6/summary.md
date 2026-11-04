@@ -26,6 +26,8 @@ Decisions: [ADR 0012](../adr/0012-distribution.md).
 | Unit tests | **201 pass** (Phase 5: 194). New:<ul><li>the updater: download, restart refused during an interview, plain error messages, off in development, timing;</li><li>free-tier errors recognized;</li><li>preparation falls back to a free model and remembers it;</li><li>live requests skip a model the key doesn't have.</li></ul> |
 | End-to-end (Playwright, built app) | **19 of 19 pass**. New: connecting Gemini from the Home page (a rejected key, then a good one) |
 | CI smoke test | Also fails now if the updater is missing from the installed app |
+| CI ([run 41871981702](https://github.com/whiteangel-dev/AiInterviewCopilot/actions/runs/41871981702)) | All jobs pass, including Windows unit and e2e tests (19 of 19) and the installer |
+| Release `v1.0.0` ([run 41872021895](https://github.com/whiteangel-dev/AiInterviewCopilot/actions/runs/41872021895)) | Passed: tests, installer built and uploaded to a **draft** release, installed app smoke-tested (native audio and updater loaded). Waiting for you to publish |
 
 ## Publishing a release
 
