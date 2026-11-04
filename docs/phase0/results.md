@@ -94,5 +94,5 @@ npm run bench:llm -- --runs 2          # --models a,b  --context-copies 4  --exp
 npm run bench:turns -- --runs 2
 npm run e2e                            # full pipeline, last word → first answer word
 
-cd native-audio && npm run build && npm run smoke   # needs Rust; on Windows also captures real devices
+cd ../packages/native-audio && npm run build && npm run smoke   # needs Rust; on Windows also captures real devices
 ```

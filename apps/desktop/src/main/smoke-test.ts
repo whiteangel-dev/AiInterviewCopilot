@@ -38,6 +38,8 @@ export async function runSmokeTest(ctx: {
   try {
     const settings = await host.call('settings.get');
     const ping = await host.call('ping');
+    // Loads the native audio module (unpacked from app.asar) and lists devices.
+    const audio = await host.call('audio.environment', { refresh: false });
 
     let uiReady = false;
     while (!uiReady && Date.now() - startedAt < TIMEOUT_MS - 5000) {
@@ -60,6 +62,11 @@ export async function runSmokeTest(ctx: {
       secureStorage: secrets.level,
       theme: settings.appearance.theme,
       uiReady,
+      nativeAudio: audio.native.available,
+      nativeAudioError: audio.native.error,
+      nativeSources: audio.native.sources,
+      audioBackend: audio.backend,
+      audioDevices: audio.devices.length,
     });
   } catch (err) {
     clearTimeout(timer);

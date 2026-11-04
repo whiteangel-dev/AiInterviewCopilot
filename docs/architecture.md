@@ -1,6 +1,6 @@
 # AI Interview Copilot — Architecture
 
-**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)). Individual decisions are recorded in [docs/adr/](adr/).
+**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)); live listening built in Phase 3 ([summary](phase3/summary.md)), real-device capture still to be confirmed on a Windows PC. Individual decisions are recorded in [docs/adr/](adr/).
 
 A Windows-first (macOS later) desktop app. It listens to a live job interview, detects the interviewer's questions, and streams short, natural answers grounded in the candidate's resume and their own notes ("Application Knowledge"). English-only.
 
@@ -29,21 +29,22 @@ A Windows-first (macOS later) desktop app. It listens to a live job interview, d
 ## 3. Processes
 
 ```
-┌ Main window (React) ┐       ┌ Copilot window (React) ┐
-│ sandboxed renderer  │       │ sandboxed renderer     │
-└─────────┬───────────┘       └───────────┬────────────┘
-          │ IPC (invoke)                  │ direct MessagePort (transcript, answer tokens)
-┌─────────▼───────────┐                   │
-│ Main process        │       ┌───────────▼──────────────────────────────────┐
-│ windows · tray ·    │ keys  │ Engine (utilityProcess)                      │
-│ hotkeys · updater · ├──────►│ native audio → STT → turn analyzer ∥ answer  │
-│ safeStorage         │       │ SQLite owner · worker threads for heavy jobs │
-└─────────────────────┘       └──────────────────────────────────────────────┘
+┌ Main window (React) ┐  ┌ Copilot window (React) ┐  ┌ Capture window (hidden) ┐
+│ sandboxed renderer  │  │ sandboxed renderer     │  │ built-in capture only;  │
+└─────────┬───────────┘  └───────────┬────────────┘  │ own session, no bridge  │
+          │ IPC (invoke) · live events (broadcast)│  └────────────┬────────────┘
+┌─────────▼────────────────────────────▼───┐                      │ MessagePort (audio frames)
+│ Main process                              │       ┌──────────────▼───────────────────────────────┐
+│ windows · hotkeys · updater · safeStorage ├──────►│ Engine (utilityProcess)                      │
+└───────────────────────────────────────────┘ keys  │ native audio → STT → turn analyzer ∥ answer  │
+                                                    │ SQLite owner · worker threads for heavy jobs │
+                                                    └──────────────────────────────────────────────┘
 ```
 
 - **Main process** stays light; if it blocks, every window freezes.
 - **Engine** runs the whole live pipeline in an Electron `utilityProcess`. Heavy jobs (resume parsing, embeddings) run on worker threads.
 - **Renderers** are sandboxed, use `contextIsolation`, have no Node.js access and a strict CSP. The packaged UI loads from `app://renderer/`, not `file://`.
+- **Live events** (transcript, meters, state) go from the engine through main to both windows. A direct engine → renderer MessagePort remains an option if Phase 4's token streams need it ([ADR 0009](adr/0009-live-listening.md)).
 - **IPC:**
   - renderer → main uses one allowlisted `invoke` bridge; main checks the sender, validates every payload with Zod, and replies with a `Result` envelope that keeps error codes;
   - main ↔ engine uses a typed RPC (`@aic/ipc`) with timeouts and events;
@@ -91,18 +92,21 @@ Use only Gemini's automatic (implicit) caching: explicit caches *increased* late
 
 ## 5. Audio capture
 
-- **Windows (primary):** the native module opens WASAPI in shared, event-driven mode.
+Built in Phase 3 ([ADR 0009](adr/0009-live-listening.md)).
+
+- **Windows (primary):** the native module (`packages/native-audio`) opens WASAPI in shared, event-driven mode.
   - Microphone: the capture endpoint.
   - Interviewer: loopback of the output device, or **per-app loopback** (only Zoom/Teams/browser; Windows 10 2004+ / 11).
   - It asks Windows to convert to 16 kHz mono (AUTOCONVERTPCM) and falls back to converting in Rust.
   - Loopback sends no data during silence, so gaps are filled with silent frames to keep the timeline continuous.
-- **Fallback:** Electron's built-in capture (`getDisplayMedia` loopback + `getUserMedia`).
+  - Follows the default device, and reopens a device that was unplugged.
+- **Fallback:** Electron's built-in capture (`getDisplayMedia` loopback + `getUserMedia`) in a hidden window with its own session; frames reach the engine over a MessagePort.
 - **macOS (later):** Core Audio process taps on 14.2+, ScreenCaptureKit audio on 13.x, through a Swift module bridged into the same Rust module.
 - **Echo:**
   - recommend headphones;
-  - detect echo by comparing channel activity;
-  - cancel echo later using system audio as the reference;
-  - remove mic transcript lines that duplicate interviewer text.
+  - detect echo by comparing channel levels (built);
+  - remove mic transcript lines that duplicate interviewer text (built);
+  - cancel echo later using system audio as the reference.
 
 ## 6. Preparation pipeline (not latency-sensitive)
 
@@ -132,10 +136,10 @@ Built in Phase 2; details in [ADR 0008](adr/0008-preparation-pipeline.md).
 | Knowledge | `knowledge_bases`, `knowledge_items` (fact/instruction), `knowledge_compilations` (snapshot) |
 | Search | `context_chunks` + FTS5 + sqlite-vec, if retrieval is needed (Phase 4; the whole brief and knowledge currently fit in the prompt) |
 | Answer bank | `prepared_answers` |
-| Sessions | `sessions` (pins profile version), `session_knowledge` (pins snapshots), `transcript_segments` (final only), `questions`, `answers` (tokens, time to first token, model), `latency_events` |
+| Sessions | `sessions` (pins the profile version; snapshot of the answer context and vocabulary), `transcript_segments` (final only). Phase 4: `questions`, `answers` (tokens, time to first token, model), `latency_events` |
 | Settings | `provider_configs` (key *reference* and last 4 characters only; cached model list), `app_settings` (one row per section) |
 
-IDs are UUIDv7. Deleting a profile or knowledge base removes everything under it, and `secure_delete` overwrites the freed pages. Sessions (Phase 3) will keep a snapshot of the context they used. "Delete my data" removes everything. The schema version is `PRAGMA user_version`. An existing database is backed up (still encrypted) before migrating, and a database from a newer app version is refused.
+IDs are UUIDv7. Deleting a profile or knowledge base removes everything under it, and `secure_delete` overwrites the freed pages. Sessions keep a snapshot of the context they used, so they survive changes to (or deletion of) the profile. "Delete my data" removes everything. The schema version is `PRAGMA user_version`. An existing database is backed up (still encrypted) before migrating, and a database from a newer app version is refused.
 
 The database key is 256 random bits created on first run and kept in main's secret store (`secrets.json`, each entry encrypted with `safeStorage`). If it can't be read (for example, the data was copied to another Windows account), the app offers to start fresh instead of failing silently.
 
@@ -158,13 +162,13 @@ apps/desktop/        Electron app: src/{main,preload,engine,renderer}, e2e/, ele
 packages/ipc/        contracts: IPC channels, settings schema, engine RPC, errors (Zod)
 packages/core/       engine logic without Electron: AI providers, model roles, logging, redaction
 packages/db/         schema, generated migrations (drizzle/), repositories
-packages/prompts/    versioned prompts, model output schemas, brief and knowledge compilers
+packages/prompts/    versioned prompts, model output schemas, brief and knowledge compilers, vocabulary
+packages/native-audio/  Rust (napi-rs) WASAPI capture module; built into apps/desktop/resources/native/
 docs/                architecture, ADRs, phase reports, release process
 spikes/              Phase 0 benchmarks and the native audio module (kept as reference)
 ```
 
 Still to come:
-- `packages/native-audio/`: moves from `spikes/native-audio` in Phase 3.
 - `evals/`: Phase 4.
 
 ## 10. Roadmap
@@ -174,8 +178,8 @@ Still to come:
 | 0 | Speed spikes, provider choices, native audio module, end-to-end prototype | **Done** (real-device Windows capture test moves to Phase 3) |
 | 1 | Electron app foundation, monorepo, encrypted database, keychain, settings, CI with Windows builds | **Done** ([summary](phase1/summary.md)); signing waits for a certificate |
 | 2 | Resume import and extraction, Application Knowledge, answer bank | **Done** ([summary](phase2/summary.md)) |
-| 3 | Audio capture on real devices, live transcription, copilot window, hotkeys | Next |
-| 4 | Turn detection + answer generation (**Windows MVP**) | |
+| 3 | Audio capture on real devices, live transcription, copilot window, hotkeys | **Done** ([summary](phase3/summary.md)); real-device capture to confirm on a Windows PC |
+| 4 | Turn detection + answer generation (**Windows MVP**) | Next |
 | 5 | Speed and quality hardening: fact check, echo cancellation, provider failover | |
 | 6 | Windows commercial release: onboarding, updates, licensing, privacy | |
 | 7 | macOS | |

@@ -1,5 +1,7 @@
 import { rmSync } from 'node:fs';
-import { app, shell } from 'electron';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { app, BrowserWindow, clipboard, dialog, shell } from 'electron';
 import type { Logger } from '@aic/core';
 import {
   AppError,
@@ -10,7 +12,9 @@ import {
   type AppInfo,
   type ForwardedChannel,
 } from '@aic/ipc';
+import type { CopilotWindow } from './copilot-window';
 import type { EngineHost } from './engine-host';
+import type { Hotkeys } from './hotkeys';
 import { broadcast, type InvokeHandlers } from './ipc';
 import type { AppPaths } from './paths';
 import type { SecretStore } from './secret-store';
@@ -20,6 +24,10 @@ interface Context {
   secrets: SecretStore;
   paths: AppPaths;
   log: Logger;
+  copilot: CopilotWindow;
+  hotkeys: Hotkeys;
+  /** Parent for dialogs. */
+  mainWindow: () => BrowserWindow | null;
 }
 
 /** Network calls to the provider can be slow; allow more than the default RPC timeout. */
@@ -41,7 +49,15 @@ function forwardedHandlers(host: EngineHost): Pick<InvokeHandlers, ForwardedChan
   return Object.fromEntries(entries) as Pick<InvokeHandlers, ForwardedChannel>;
 }
 
-export function createInvokeHandlers({ host, secrets, paths, log }: Context): InvokeHandlers {
+export function createInvokeHandlers({
+  host,
+  secrets,
+  paths,
+  log,
+  copilot,
+  hotkeys,
+  mainWindow,
+}: Context): InvokeHandlers {
   return {
     ...forwardedHandlers(host),
 
@@ -119,5 +135,39 @@ export function createInvokeHandlers({ host, secrets, paths, log }: Context): In
     },
 
     'models:list': (params) => host.call('models.list', params, PROVIDER_CALL),
+
+    'sessions:saveTranscript': async ({ id, format }) => {
+      const { fileName, text } = await host.call('sessions.export', { id, format });
+      const options = {
+        title: 'Save transcript',
+        defaultPath: join(app.getPath('documents'), fileName),
+        filters:
+          format === 'markdown'
+            ? [{ name: 'Markdown', extensions: ['md'] }]
+            : [{ name: 'Text', extensions: ['txt'] }],
+      };
+      const parent = mainWindow() ?? BrowserWindow.getFocusedWindow();
+      const result = parent
+        ? await dialog.showSaveDialog(parent, options)
+        : await dialog.showSaveDialog(options);
+      if (result.canceled || !result.filePath) return { saved: false };
+      await writeFile(result.filePath, text, 'utf8');
+      log.info('transcript saved');
+      return { saved: true };
+    },
+
+    'app:copyText': async (text) => {
+      await clipboard.writeText(text);
+    },
+
+    'copilot:setVisible': ({ visible }) => {
+      if (visible) copilot.show();
+      else copilot.hide();
+      return copilot.visible;
+    },
+
+    'copilot:getVisible': () => copilot.visible,
+
+    'hotkeys:status': () => hotkeys.statuses,
   };
 }

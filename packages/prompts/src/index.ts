@@ -5,3 +5,4 @@ export * from './knowledge';
 export * from './resume';
 export * from './rules';
 export * from './text';
+export * from './vocabulary';

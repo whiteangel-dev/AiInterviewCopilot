@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { utilityProcess, type UtilityProcess } from 'electron';
+import { utilityProcess, type MessagePortMain, type UtilityProcess } from 'electron';
 import type { Logger } from '@aic/core';
 import {
   AppError,
@@ -8,6 +8,7 @@ import {
   type EngineEvents,
   type EngineInitParams,
   type EngineMethods,
+  type EnginePortMessage,
   type EngineStatus,
   type ErrorCode,
   type RpcEndpoint,
@@ -49,6 +50,12 @@ export class EngineHost {
     'settings.changed': [EngineEvents['settings.changed']];
     'apiKey.changed': [EngineEvents['apiKey.changed']];
     'job.progress': [EngineEvents['job.progress']];
+    'live.state': [EngineEvents['live.state']];
+    'live.meter': [EngineEvents['live.meter']];
+    'live.transcript': [EngineEvents['live.transcript']];
+    'live.suggestion': [EngineEvents['live.suggestion']];
+    'capture.open': [EngineEvents['capture.open']];
+    'capture.close': [EngineEvents['capture.close']];
   }>();
 
   #status: EngineStatus = { state: 'starting', error: null, restarts: 0, schemaVersion: null };
@@ -94,6 +101,13 @@ export class EngineHost {
       o?: CallOptions,
     ) => Promise<unknown>;
     return call(method, params, options);
+  }
+
+  /** Hands the engine a MessagePort (outside the RPC protocol). Returns false if it isn't running. */
+  postPort(message: EnginePortMessage, port: MessagePortMain): boolean {
+    if (!this.#child || this.#status.state !== 'ready') return false;
+    this.#child.postMessage(message, [port]);
+    return true;
   }
 
   /** Stops the engine gracefully (closing the database), then kills it if needed. */
@@ -195,6 +209,12 @@ export class EngineHost {
     client.on('settings.changed', (s) => this.events.emit('settings.changed', s));
     client.on('apiKey.changed', (s) => this.events.emit('apiKey.changed', s));
     client.on('job.progress', (p) => this.events.emit('job.progress', p));
+    client.on('live.state', (s) => this.events.emit('live.state', s));
+    client.on('live.meter', (m) => this.events.emit('live.meter', m));
+    client.on('live.transcript', (t) => this.events.emit('live.transcript', t));
+    client.on('live.suggestion', (s) => this.events.emit('live.suggestion', s));
+    client.on('capture.open', (r) => this.events.emit('capture.open', r));
+    client.on('capture.close', (r) => this.events.emit('capture.close', r));
 
     this.#child = child;
     this.#client = client;

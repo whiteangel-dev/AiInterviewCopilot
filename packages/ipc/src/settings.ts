@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { AcceleratorSchema, CaptureBackendSettingSchema, InterviewerSourceSchema } from './live';
 import { DEFAULT_MODELS } from './models';
 
 /**
@@ -18,6 +19,8 @@ export const ThemeSchema = z.enum(['system', 'light', 'dark']);
 export const AnswerModeSchema = z.enum(['fast', 'quality']);
 export const AnswerLengthSchema = z.enum(['short', 'standard', 'detailed']);
 export const TranscriptRetentionSchema = z.enum(['7d', '30d', '90d', '1y', 'forever']);
+export const CopilotFontSizeSchema = z.enum(['small', 'medium', 'large']);
+const DeviceIdSchema = z.string().min(1).max(512);
 
 const fields = {
   appearance: {
@@ -37,6 +40,30 @@ const fields = {
   privacy: {
     transcriptRetention: TranscriptRetentionSchema,
   },
+  audio: {
+    backend: CaptureBackendSettingSchema,
+    /** null: the system default microphone. */
+    microphoneId: DeviceIdSchema.nullable(),
+    /** All system audio, or only one app (Windows 10 2004+). */
+    interviewerSource: InterviewerSourceSchema,
+    /** null: the default output device. Used for `system`. */
+    outputDeviceId: DeviceIdSchema.nullable(),
+    /** Executable name (e.g. `Zoom.exe`) for `app`. */
+    appName: z.string().trim().min(1).max(260).nullable(),
+    transcribeMicrophone: z.boolean(),
+  },
+  copilot: {
+    opacity: z.number().min(0.4).max(1),
+    alwaysOnTop: z.boolean(),
+    /** Exclude the copilot window from screen sharing and recordings (Windows 10 2004+, macOS). */
+    hideFromScreenShare: z.boolean(),
+    showOnStart: z.boolean(),
+    fontSize: CopilotFontSizeSchema,
+  },
+  hotkeys: {
+    toggleCopilot: AcceleratorSchema.nullable(),
+    pauseListening: AcceleratorSchema.nullable(),
+  },
 } as const;
 
 export const SettingsSchema = z.strictObject({
@@ -44,6 +71,9 @@ export const SettingsSchema = z.strictObject({
   models: z.strictObject(fields.models),
   answers: z.strictObject(fields.answers),
   privacy: z.strictObject(fields.privacy),
+  audio: z.strictObject(fields.audio),
+  copilot: z.strictObject(fields.copilot),
+  hotkeys: z.strictObject(fields.hotkeys),
 });
 
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -58,6 +88,25 @@ export const DEFAULT_SETTINGS: Settings = {
   models: { ...DEFAULT_MODELS },
   answers: { mode: 'fast', length: 'standard' },
   privacy: { transcriptRetention: '90d' },
+  audio: {
+    backend: 'auto',
+    microphoneId: null,
+    interviewerSource: 'system',
+    outputDeviceId: null,
+    appName: null,
+    transcribeMicrophone: true,
+  },
+  copilot: {
+    opacity: 0.96,
+    alwaysOnTop: true,
+    hideFromScreenShare: true,
+    showOnStart: true,
+    fontSize: 'medium',
+  },
+  hotkeys: {
+    toggleCopilot: 'CommandOrControl+Alt+Space',
+    pauseListening: 'CommandOrControl+Alt+P',
+  },
 };
 
 export const SettingsPatchSchema = z.strictObject({
@@ -65,6 +114,9 @@ export const SettingsPatchSchema = z.strictObject({
   models: z.strictObject(fields.models).partial().optional(),
   answers: z.strictObject(fields.answers).partial().optional(),
   privacy: z.strictObject(fields.privacy).partial().optional(),
+  audio: z.strictObject(fields.audio).partial().optional(),
+  copilot: z.strictObject(fields.copilot).partial().optional(),
+  hotkeys: z.strictObject(fields.hotkeys).partial().optional(),
 });
 
 export type SettingsPatch = z.infer<typeof SettingsPatchSchema>;

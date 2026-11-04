@@ -1,13 +1,29 @@
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { app, safeStorage, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import {
+  app,
+  globalShortcut,
+  safeStorage,
+  type BrowserWindow,
+  type IpcMainInvokeEvent,
+} from 'electron';
 import { createLogger, type Logger } from '@aic/core';
 import engineModulePath from '../engine/index?modulePath';
-import { AppError, PROVIDERS, apiKeySecretRef, type SecureStorageLevel } from '@aic/ipc';
+import {
+  AppError,
+  PROVIDERS,
+  apiKeySecretRef,
+  type EngineInitParams,
+  type SecureStorageLevel,
+  type Settings,
+} from '@aic/ipc';
 import { APP_ORIGIN, handleAppProtocol, registerAppSchemePrivileges } from './app-protocol';
+import { BuiltInCapture } from './capture-window';
+import { CopilotWindow } from './copilot-window';
 import { loadOrCreateDbKey } from './data-key';
 import { EngineHost } from './engine-host';
 import { createInvokeHandlers } from './handlers';
+import { Hotkeys } from './hotkeys';
 import { broadcast, registerInvokeHandlers } from './ipc';
 import { createMainWindow } from './main-window';
 import { appPaths } from './paths';
@@ -23,6 +39,11 @@ if (!app.isPackaged) {
     app.setPath('userData', resolve(process.env.AIC_USER_DATA_DIR));
   if (process.env.AIC_PASSWORD_STORE) {
     app.commandLine.appendSwitch('password-store', process.env.AIC_PASSWORD_STORE);
+  }
+  // Tests: a fake microphone (a beep) for Electron's built-in capture.
+  if (process.env.AIC_FAKE_MEDIA === '1') {
+    app.commandLine.appendSwitch('use-fake-device-for-media-stream');
+    app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
   }
 }
 app.setAppLogsPath(join(app.getPath('userData'), 'logs'));
@@ -46,6 +67,35 @@ if (!app.requestSingleInstanceLock()) {
       console.error('Failed to start', err);
       app.exit(1);
     });
+}
+
+/** The native audio module for this platform, if the build includes one. */
+function nativeAudioPath(): string | null {
+  // Native modules can't load from inside app.asar; electron-builder unpacks them.
+  const root = app.isPackaged
+    ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked')
+    : app.getAppPath();
+  const file = join(
+    root,
+    'resources',
+    'native',
+    `${process.platform}-${process.arch}`,
+    'aic_native_audio.node',
+  );
+  if (!app.isPackaged && process.env.AIC_NATIVE_AUDIO === '0') return null;
+  return existsSync(file) ? file : null;
+}
+
+/** Development and tests: recorded WAVs instead of live capture. */
+function audioReplay(): EngineInitParams['audioReplay'] {
+  if (app.isPackaged) return null;
+  const interviewer = process.env.AIC_AUDIO_REPLAY_INTERVIEWER;
+  const candidate = process.env.AIC_AUDIO_REPLAY_CANDIDATE;
+  if (!interviewer && !candidate) return null;
+  return {
+    interviewer: interviewer ? resolve(interviewer) : null,
+    candidate: candidate ? resolve(candidate) : null,
+  };
 }
 
 function electronCipher(): Cipher {
@@ -108,6 +158,8 @@ async function main(): Promise<void> {
       logDir: paths.logs,
       appVersion: app.getVersion(),
       fakeProvider: !app.isPackaged && process.env.AIC_FAKE_PROVIDER === '1',
+      nativeAudioPath: nativeAudioPath(),
+      audioReplay: audioReplay(),
     }),
     onInitialized: async (client) => {
       for (const provider of PROVIDERS) {
@@ -124,21 +176,92 @@ async function main(): Promise<void> {
     },
   });
 
-  host.events.on('status', (status) => broadcast('engine:status', status));
+  const rendererUrl = (page: string) =>
+    devServerUrl ? `${devServerUrl.replace(/\/$/, '')}/${page}` : `${APP_ORIGIN}/${page}`;
+  const preloadPath = join(__dirname, '../preload/index.js');
+
+  const copilot = new CopilotWindow({
+    url: rendererUrl('copilot.html'),
+    preload: preloadPath,
+    statePath: paths.copilotWindowState,
+    onVisibilityChange: (visible) => broadcast('copilot:visibility', visible),
+  });
+  const capture = new BuiltInCapture({
+    url: rendererUrl('capture.html'),
+    preload: join(__dirname, '../preload/capture.js'),
+    rendererRoot: join(__dirname, '../renderer'),
+    host,
+    log: log.child('capture'),
+  });
+  const hotkeys = new Hotkeys(
+    globalShortcut,
+    {
+      toggleCopilot: () => copilot.toggle(),
+      pauseListening: () => {
+        void host
+          .call('live.state')
+          .then((state) => {
+            if (state?.status === 'live') return host.call('live.pause');
+            if (state?.status === 'paused') return host.call('live.resume');
+            return null;
+          })
+          .catch((err: unknown) => log.warn('pause hotkey failed', { err }));
+      },
+    },
+    log.child('hotkeys'),
+  );
+
+  let currentSettings: Settings | null = null;
+  const applySettings = (settings: Settings) => {
+    currentSettings = settings;
+    applyTheme(settings.appearance.theme);
+    cacheTheme(paths.uiCache, settings.appearance.theme);
+    copilot.apply(settings.copilot);
+    if (hotkeys.apply(settings.hotkeys)) broadcast('hotkeys:status', hotkeys.statuses);
+  };
+
+  host.events.on('status', (status) => {
+    broadcast('engine:status', status);
+    if (status.state !== 'ready') {
+      // A restarted engine has no live run.
+      capture.close();
+      broadcast('live:state', null);
+    }
+  });
   host.events.on('apiKey.changed', (status) => broadcast('apiKey:changed', status));
   host.events.on('job.progress', (progress) => broadcast('job:progress', progress));
   host.events.on('settings.changed', (settings) => {
-    applyTheme(settings.appearance.theme);
-    cacheTheme(paths.uiCache, settings.appearance.theme);
+    applySettings(settings);
     broadcast('settings:changed', settings);
   });
+  let shownFor: string | null = null;
+  host.events.on('live.state', (state) => {
+    broadcast('live:state', state);
+    if (state?.mode === 'interview' && state.status === 'live' && shownFor !== state.id) {
+      shownFor = state.id;
+      if (currentSettings?.copilot.showOnStart ?? true) copilot.show();
+    }
+  });
+  host.events.on('live.meter', (meter) => broadcast('live:meter', meter));
+  host.events.on('live.transcript', (update) => broadcast('live:transcript', update));
+  host.events.on('live.suggestion', (suggestion) => broadcast('live:suggestion', suggestion));
+  host.events.on('capture.open', (request) => capture.open(request));
+  host.events.on('capture.close', ({ runId }) => capture.close(runId));
 
   const isTrustedSender = (event: IpcMainInvokeEvent): boolean => {
     const frame = event.senderFrame;
     return !!frame && frame === event.sender.mainFrame && isTrustedUrl(frame.url, origins);
   };
   registerInvokeHandlers(
-    createInvokeHandlers({ host, secrets, paths, log: log.child('ipc') }),
+    createInvokeHandlers({
+      host,
+      secrets,
+      paths,
+      log: log.child('ipc'),
+      copilot,
+      hotkeys,
+      mainWindow: () => mainWindow,
+    }),
     isTrustedSender,
     log.child('ipc'),
   );
@@ -147,24 +270,27 @@ async function main(): Promise<void> {
   // Apply the stored theme once the engine is up (the cache covers first paint).
   void host
     .call('settings.get')
-    .then((settings) => {
-      applyTheme(settings.appearance.theme);
-      cacheTheme(paths.uiCache, settings.appearance.theme);
-    })
+    .then(applySettings)
     .catch(() => undefined);
 
   mainWindow = createMainWindow({
-    url: devServerUrl ?? `${APP_ORIGIN}/index.html`,
-    preload: join(__dirname, '../preload/index.js'),
+    url: rendererUrl('index.html'),
+    preload: preloadPath,
     statePath: paths.windowState,
   });
-  mainWindow.on('closed', () => (mainWindow = null));
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+    // The copilot window only hides on close; quit with the main window.
+    copilot.destroy();
+    capture.close();
+  });
 
   if (process.env.AIC_SMOKE_TEST === '1') {
     void runSmokeTest({ window: mainWindow, host, secrets, log: log.child('smoke') });
   }
 
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', () => hotkeys.unregisterAll());
 
   let shutdownComplete = false;
   app.on('before-quit', (event) => {

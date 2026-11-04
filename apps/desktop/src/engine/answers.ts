@@ -25,7 +25,7 @@ const ROLE_SPECIFIC_COUNT = 6;
 /** A generated question this similar to an existing one is a duplicate. */
 const DUPLICATE_SCORE = 0.85;
 
-const toAnswer = (r: PreparedAnswerRow): PreparedAnswer => ({
+export const toAnswer = (r: PreparedAnswerRow): PreparedAnswer => ({
   id: r.id,
   profileId: r.profileId,
   question: r.question,

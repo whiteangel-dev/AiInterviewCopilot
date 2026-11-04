@@ -13,7 +13,8 @@ import { create } from 'zustand';
 import { invoke, on } from './lib/api';
 import { errorMessage } from './lib/utils';
 
-export type Page = 'home' | 'profiles' | 'knowledge' | 'answers' | 'settings';
+export type Page =
+  'home' | 'interview' | 'sessions' | 'profiles' | 'knowledge' | 'answers' | 'audio' | 'settings';
 
 export interface NavigateOptions {
   /** Settings section to scroll to. */
@@ -21,6 +22,8 @@ export interface NavigateOptions {
   /** Open this profile (Profiles page) or select it (Answer bank). */
   profileId?: string | null;
   baseId?: string | null;
+  /** Open this session (Sessions page). */
+  sessionId?: string | null;
 }
 
 export interface Toast {
@@ -39,6 +42,8 @@ interface AppState {
   baseId: string | null;
   /** Profile the Answer bank shows. */
   answersProfileId: string | null;
+  /** Open session on the Sessions page (null: the list). */
+  sessionId: string | null;
   profiles: ProfileSummary[] | null;
   bases: KnowledgeBaseSummary[] | null;
   info: AppInfo | null;
@@ -72,6 +77,7 @@ export const useApp = create<AppState>()((set, get) => ({
   profileId: null,
   baseId: null,
   answersProfileId: null,
+  sessionId: null,
   profiles: null,
   bases: null,
   info: null,
@@ -86,6 +92,7 @@ export const useApp = create<AppState>()((set, get) => ({
       page,
       focusSection: options.section ?? null,
       ...(page === 'profiles' ? { profileId: options.profileId ?? null } : {}),
+      ...(page === 'sessions' ? { sessionId: options.sessionId ?? null } : {}),
       ...(page === 'answers' && options.profileId !== undefined
         ? { answersProfileId: options.profileId }
         : {}),

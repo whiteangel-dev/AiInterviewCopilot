@@ -43,6 +43,24 @@ export const INVOKE_CHANNELS = [
   'answers:update',
   'answers:delete',
   'answers:match',
+  'audio:environment',
+  'live:start',
+  'live:pause',
+  'live:resume',
+  'live:stop',
+  'live:state',
+  'live:transcript',
+  'live:diagnostics',
+  'sessions:list',
+  'sessions:get',
+  'sessions:rename',
+  'sessions:delete',
+  // Handled in main.
+  'sessions:saveTranscript',
+  'app:copyText',
+  'copilot:setVisible',
+  'copilot:getVisible',
+  'hotkeys:status',
 ] as const;
 
 export type InvokeChannel = (typeof INVOKE_CHANNELS)[number];
@@ -52,6 +70,12 @@ export const EVENT_CHANNELS = [
   'settings:changed',
   'apiKey:changed',
   'job:progress',
+  'live:state',
+  'live:meter',
+  'live:transcript',
+  'live:suggestion',
+  'copilot:visibility',
+  'hotkeys:status',
 ] as const;
 
 export type EventChannel = (typeof EVENT_CHANNELS)[number];

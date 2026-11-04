@@ -23,3 +23,6 @@ spikes/capture-win/recordings/
 .DS_Store
 Thumbs.db
 *.log
+
+# Native audio module copied into the app by `npm run build -w @aic/native-audio`
+apps/desktop/resources/native/

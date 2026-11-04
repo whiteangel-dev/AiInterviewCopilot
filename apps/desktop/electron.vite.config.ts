@@ -26,8 +26,11 @@ export default defineConfig({
       // Sandboxed preloads can't load other files: bundle everything into one script.
       externalizeDeps: false,
       rolldownOptions: {
-        input: { index: resolve(__dirname, 'src/preload/index.ts') },
-        output: { format: 'cjs', codeSplitting: false },
+        input: {
+          index: resolve(__dirname, 'src/preload/index.ts'),
+          capture: resolve(__dirname, 'src/preload/capture.ts'),
+        },
+        output: { format: 'cjs' },
       },
     },
   },
@@ -37,7 +40,11 @@ export default defineConfig({
     build: {
       minify: true,
       rolldownOptions: {
-        input: { index: resolve(__dirname, 'src/renderer/index.html') },
+        input: {
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          copilot: resolve(__dirname, 'src/renderer/copilot.html'),
+          capture: resolve(__dirname, 'src/renderer/capture.html'),
+        },
       },
     },
   },

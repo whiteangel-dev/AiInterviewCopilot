@@ -9,6 +9,7 @@ import { openDatabase, type AppDatabase } from './open';
 import { AnswerRepository } from './repositories/answers';
 import { KnowledgeRepository } from './repositories/knowledge';
 import { ProfileRepository } from './repositories/profiles';
+import { SessionRepository } from './repositories/sessions';
 
 const dirs: string[] = [];
 const dbs: AppDatabase[] = [];
@@ -131,6 +132,82 @@ describe('KnowledgeRepository', () => {
     expect(r.deleteBase(base.id)).toBe(true);
     expect(r.items(base.id)).toEqual([]);
     expect(r.latestAnalysis(base.id)).toBeUndefined();
+  });
+});
+
+describe('SessionRepository', () => {
+  const audio = { backend: 'replay' as const, interviewer: 'Test', candidate: 'Test' };
+  const newSession = (repo: SessionRepository, startedAt: number, profileId: string | null) =>
+    repo.create({
+      title: 'Interview',
+      profileId,
+      profileVersionId: null,
+      profileName: 'Jordan',
+      knowledgeBaseId: null,
+      knowledgeBaseName: null,
+      context: 'ctx',
+      vocabulary: ['KestrelPay'],
+      audio,
+      startedAt,
+    });
+
+  it('stores segments in time order and lists sessions newest first with counts', () => {
+    const db = open();
+    const repo = new SessionRepository(db.db);
+    const older = newSession(repo, 1000, null);
+    const newer = newSession(repo, 2000, null);
+    repo.addSegment(newer.id, { channel: 'candidate', text: 'Sure.', startMs: 3000, endMs: 3500 });
+    repo.addSegment(newer.id, { channel: 'interviewer', text: 'Hi?', startMs: 100, endMs: 900 });
+    expect(repo.segments(newer.id).map((s) => s.text)).toEqual(['Hi?', 'Sure.']);
+    expect(repo.list().map((s) => [s.id, s.segmentCount])).toEqual([
+      [newer.id, 2],
+      [older.id, 0],
+    ]);
+    expect(repo.get(newer.id)?.vocabulary).toEqual(['KestrelPay']);
+    repo.delete(newer.id);
+    expect(repo.segmentCount(newer.id)).toBe(0);
+  });
+
+  it('marks sessions cut off by a crash as interrupted', () => {
+    const db = open();
+    const repo = new SessionRepository(db.db);
+    const s = newSession(repo, 1000, null);
+    repo.addSegment(s.id, { channel: 'interviewer', text: 'Hello', startMs: 0, endMs: 4200 });
+    expect(repo.markInterrupted()).toBe(1);
+    const after = repo.get(s.id)!;
+    expect(after.status).toBe('interrupted');
+    expect(after.durationMs).toBe(4200);
+    expect(after.endedAt).not.toBeNull();
+    expect(repo.markInterrupted()).toBe(0);
+  });
+
+  it('purges old finished sessions but never a live one', () => {
+    const db = open();
+    const repo = new SessionRepository(db.db);
+    const old = newSession(repo, 1000, null);
+    repo.update(old.id, { status: 'ended', endedAt: 2000 });
+    const live = newSession(repo, 1500, null);
+    const recent = newSession(repo, 10_000, null);
+    repo.update(recent.id, { status: 'ended' });
+    expect(repo.purgeStartedBefore(5000)).toBe(1);
+    expect(
+      repo
+        .list()
+        .map((s) => s.id)
+        .sort(),
+    ).toEqual([live.id, recent.id].sort());
+  });
+
+  it('keeps a session when its profile is deleted', () => {
+    const db = open();
+    const profiles = new ProfileRepository(db.db);
+    const repo = new SessionRepository(db.db);
+    const p = profiles.create('Jordan');
+    const s = newSession(repo, 1000, p.id);
+    profiles.delete(p.id);
+    const after = repo.get(s.id)!;
+    expect(after.profileId).toBeNull();
+    expect(after.profileName).toBe('Jordan');
   });
 });
 

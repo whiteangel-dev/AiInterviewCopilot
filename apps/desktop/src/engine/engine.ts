@@ -15,6 +15,7 @@ import {
   openDatabase,
   ProfileRepository,
   ProviderConfigRepository,
+  SessionRepository,
   SettingsRepository,
 } from '@aic/db';
 import {
@@ -24,6 +25,7 @@ import {
   type ApiKeyStatus,
   type EngineEvents,
   type EngineMethods,
+  type EnginePortMessage,
   type ModelInfo,
   type ProviderId,
   type RpcHandlers,
@@ -32,7 +34,9 @@ import { answerHandlers } from './answers';
 import type { EngineContext, Ready } from './context';
 import { Jobs } from './jobs';
 import { knowledgeHandlers } from './knowledge';
+import type { PortLike } from './audio-sources';
 import { profileHandlers } from './profiles';
+import { sessionModule } from './sessions';
 
 /** Cached model lists older than this are refreshed on the next request. */
 const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -60,6 +64,7 @@ function localDate(): string {
 export function createEngine(deps: EngineDeps): {
   handlers: RpcHandlers<EngineMethods>;
   logger(): Logger;
+  attachPort(message: EnginePortMessage, port: PortLike): void;
 } {
   const startedAt = Date.now();
   let log: Logger = createLogger({ console: true, scope: 'engine' });
@@ -106,10 +111,13 @@ export function createEngine(deps: EngineDeps): {
     today: deps.today ?? localDate,
   };
 
+  const sessions = sessionModule(ctx);
+
   const handlers: RpcHandlers<EngineMethods> = {
     ...profileHandlers(ctx),
     ...knowledgeHandlers(ctx),
     ...answerHandlers(ctx),
+    ...sessions.handlers,
 
     'jobs.cancel': ({ jobId }) => jobs.cancel(jobId),
 
@@ -136,9 +144,17 @@ export function createEngine(deps: EngineDeps): {
         profiles: new ProfileRepository(db.db),
         knowledge: new KnowledgeRepository(db.db),
         answers: new AnswerRepository(db.db),
+        sessions: new SessionRepository(db.db),
         settings: settingsRepo.load(),
         providers: { gemini: params.fakeProvider ? new FakeProvider() : new GeminiProvider() },
+        init: {
+          appVersion: params.appVersion,
+          fakeProvider: params.fakeProvider,
+          nativeAudioPath: params.nativeAudioPath,
+          audioReplay: params.audioReplay,
+        },
       };
+      sessions.onReady();
       log.info('database ready', {
         schemaVersion: db.schemaVersion,
         backup: db.backupPath !== null,
@@ -158,6 +174,7 @@ export function createEngine(deps: EngineDeps): {
 
     shutdown() {
       log.info('shutting down');
+      if (state) sessions.shutdown();
       state?.db.close();
       state = null;
       log.close();
@@ -267,5 +284,12 @@ export function createEngine(deps: EngineDeps): {
     },
   };
 
-  return { handlers, logger: () => log };
+  return {
+    handlers,
+    logger: () => log,
+    attachPort: (message, port) => {
+      if (!state) port.close();
+      else sessions.attachPort(message, port);
+    },
+  };
 }

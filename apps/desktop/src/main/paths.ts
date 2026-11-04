@@ -9,6 +9,7 @@ export interface AppPaths {
   backups: string;
   secrets: string;
   windowState: string;
+  copilotWindowState: string;
   uiCache: string;
 }
 
@@ -23,6 +24,7 @@ export function appPaths(): AppPaths {
     backups: join(dataDir, 'backups'),
     secrets: join(userData, 'secrets.json'),
     windowState: join(userData, 'window-state.json'),
+    copilotWindowState: join(userData, 'copilot-window.json'),
     uiCache: join(userData, 'ui-cache.json'),
   };
 }

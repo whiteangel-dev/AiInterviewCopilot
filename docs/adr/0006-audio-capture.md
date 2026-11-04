@@ -1,6 +1,6 @@
 # ADR 0006 — Audio capture: native WASAPI module first, Electron loopback as fallback
 
-- **Status:** Accepted, pending real-device validation in Phase 3 (2026-11-03)
+- **Status:** Accepted (2026-11-03). Built in Phase 3 ([ADR 0009](0009-live-listening.md)); real-device validation is the user's first test.
 
 ## Context
 Electron's built-in capture (`getDisplayMedia` loopback) has these limits:
@@ -9,7 +9,7 @@ Electron's built-in capture (`getDisplayMedia` loopback) has these limits:
 - it gives little control over device changes.
 
 ## Decision
-- Primary: the **Rust napi-rs module** (`spikes/native-audio`, moving to `packages/native-audio`):
+- Primary: the **Rust napi-rs module** (`packages/native-audio`, moved from `spikes/native-audio` in Phase 3):
   - WASAPI shared, event-driven mode, for the microphone, system loopback and **per-app loopback**;
   - Windows converts to 16 kHz mono where possible, otherwise Rust converts;
   - silence gaps are filled to keep the timeline continuous;

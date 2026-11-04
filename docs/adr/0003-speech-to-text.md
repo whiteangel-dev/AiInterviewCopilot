@@ -19,8 +19,8 @@
 | Word error rate | 2.7%, mostly number formatting and dropped filler words |
 
 ## Consequences
-- **To verify in Phase 3:**
-  - accuracy on real call audio;
-  - session limits for long interviews (session resumption);
-  - cost per hour (this model reports no token usage).
+- **Session limits (resolved in Phase 3):** a connection gets `goAway` after about 9 minutes, and session resumption sends no handles for this model. The app rolls over to a new connection at a pause ([ADR 0009](0009-live-listening.md)).
+- **Still to verify:**
+  - accuracy on real call audio (the Phase 3 real-device test);
+  - cost per hour (this model reports no token usage; the app records audio seconds per channel).
 - **Deepgram or AssemblyAI** can be added behind `SttProvider` if real-world results disappoint.

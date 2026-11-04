@@ -50,6 +50,8 @@ describe.skipIf(!key)('Phase 2 pipeline with real Gemini', () => {
       logDir: join(dir, 'logs'),
       appVersion: 'live',
       fakeProvider: false,
+      nativeAudioPath: null,
+      audioReplay: null,
     });
     await h['apiKey.activate']({ provider: 'gemini', key: key!, verification: null, models: null });
     if (process.env.AIC_LIVE_MODEL)

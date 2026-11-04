@@ -2,7 +2,13 @@
  * Engine entry point, started by the main process with `utilityProcess.fork`.
  * Talks to main over `process.parentPort` using the typed RPC in @aic/ipc.
  */
-import { serveRpc, type EngineEvents, type EngineMethods, type RpcEndpoint } from '@aic/ipc';
+import {
+  serveRpc,
+  type EngineEvents,
+  type EngineMethods,
+  type EnginePortMessage,
+  type RpcEndpoint,
+} from '@aic/ipc';
 import { createEngine } from './engine';
 
 const parentPort = process.parentPort;
@@ -26,6 +32,14 @@ const engine = createEngine({
 
 const server = serveRpc<EngineMethods, EngineEvents>(endpoint, engine.handlers, {
   onError: (method, error) => engine.logger().warn('request failed', { method, err: error }),
+});
+
+// MessagePorts from main (Electron's built-in capture) arrive outside the RPC protocol.
+parentPort.on('message', (event: Electron.MessageEvent) => {
+  const data = event.data as Partial<EnginePortMessage> | null;
+  const port = event.ports[0];
+  if (data?.kind !== 'port' || !port) return;
+  engine.attachPort(data as EnginePortMessage, port);
 });
 
 process.on('uncaughtException', (err) => {

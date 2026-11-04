@@ -11,12 +11,14 @@ import {
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Page } from '../components/page';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardBody, CardHeader } from '../components/ui/card';
+import { invoke } from '../lib/api';
 import { cn } from '../lib/utils';
+import { audioTestedBefore, useLive } from '../live-store';
 import { useApp } from '../store';
 
 interface Step {
@@ -36,6 +38,8 @@ export function HomePage() {
   const connected = !!apiKey?.configured && apiKey.verification !== 'invalid';
   const notes = bases.reduce((n, b) => n + b.itemCount, 0);
   const toReview = profiles.reduce((n, p) => n + p.unverifiedCount, 0);
+  const audioTested = useLive((s) => s.state !== null) || audioTestedBefore();
+  const interviewed = useHasSessions();
 
   const steps: Step[] = [
     {
@@ -100,11 +104,32 @@ export function HomePage() {
         ) : undefined,
     },
     {
+      icon: AudioLines,
+      title: 'Test your audio',
+      description: 'Check that the copilot hears both you and the other side of the call.',
+      done: audioTested,
+      action: !audioTested && (
+        <Button size="sm" variant="secondary" onClick={() => navigate('audio')}>
+          Test audio <ArrowRight aria-hidden />
+        </Button>
+      ),
+    },
+    {
       icon: Radio,
-      title: 'Start an interview session',
-      description: 'Pick the company and role, then let the copilot listen.',
-      done: false,
-      upcoming: true,
+      title: 'Start an interview',
+      description: interviewed
+        ? 'Your transcripts are in Sessions.'
+        : 'Pick your profile and notes, then let the copilot listen.',
+      done: interviewed,
+      action: !interviewed && (
+        <Button
+          size="sm"
+          variant={connected && profiles.length > 0 ? 'primary' : 'secondary'}
+          onClick={() => navigate('interview')}
+        >
+          Start <ArrowRight aria-hidden />
+        </Button>
+      ),
     },
   ];
   const doneCount = steps.filter((s) => s.done).length;
@@ -177,6 +202,17 @@ export function HomePage() {
       <PrivacyNote />
     </Page>
   );
+}
+
+function useHasSessions(): boolean {
+  const [has, setHas] = useState(false);
+  const liveStatus = useLive((s) => s.state?.status);
+  useEffect(() => {
+    invoke('sessions:list')
+      .then((list) => setHas(list.length > 0))
+      .catch(() => undefined);
+  }, [liveStatus]);
+  return has;
 }
 
 function Feature({

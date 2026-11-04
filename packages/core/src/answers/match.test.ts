@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CONFIDENT_MATCH, matchQuestion, questionTokens } from './match';
+import { CONFIDENT_MATCH, matchHeard, matchQuestion, questionTokens } from './match';
 
 const bank = [
   {
@@ -40,5 +40,36 @@ describe('matchQuestion', () => {
   it('does not match unrelated questions', () => {
     expect(matchQuestion('How do you design a rate limiter?', bank)).toEqual([]);
     expect(matchQuestion('', bank)).toEqual([]);
+  });
+});
+
+describe('matchHeard', () => {
+  const bank = [
+    {
+      question: 'Tell me about yourself.',
+      variants: ['Can you tell me a little bit about yourself?'],
+    },
+    {
+      question: 'Why do you want to work here?',
+      variants: ['What interests you about this role?'],
+    },
+  ];
+
+  it('finds the question behind a lead-in', () => {
+    const m = matchHeard('To get started, can you tell me a little bit about yourself?', bank);
+    expect(m?.item.question).toBe('Tell me about yourself.');
+    expect(m?.score).toBe(1);
+  });
+
+  it('finds the question after small talk', () => {
+    const m = matchHeard(
+      'Great, thanks for that. Okay so next, what interests you about this role?',
+      bank,
+    );
+    expect(m?.item.question).toBe('Why do you want to work here?');
+  });
+
+  it('returns null when nothing matches confidently', () => {
+    expect(matchHeard('How was the traffic on your way in?', bank)).toBeNull();
   });
 });

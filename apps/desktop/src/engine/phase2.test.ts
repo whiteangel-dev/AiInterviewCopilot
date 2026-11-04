@@ -35,6 +35,8 @@ async function setup({ withKey = true } = {}) {
     logDir: join(dir, 'logs'),
     appVersion: 'test',
     fakeProvider: true,
+    nativeAudioPath: null,
+    audioReplay: null,
   });
   stops.push(() => h.shutdown());
   if (withKey)

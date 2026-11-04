@@ -20,6 +20,7 @@ export function removeDir(dir: string): void {
 
 export async function launch(
   userDataDir: string,
+  extraEnv: Record<string, string> = {},
 ): Promise<{ app: ElectronApplication; page: Page }> {
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(process.env)) if (v !== undefined) env[k] = v;
@@ -36,6 +37,7 @@ export async function launch(
       AIC_FAKE_PROVIDER: '1',
       // No OS keyring prompts on Linux dev machines and CI.
       ...(process.platform === 'linux' ? { AIC_PASSWORD_STORE: 'basic' } : {}),
+      ...extraEnv,
     },
   });
   const page = await app.firstWindow();

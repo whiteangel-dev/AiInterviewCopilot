@@ -5,9 +5,10 @@ import type {
   KnowledgeRepository,
   ProfileRepository,
   ProviderConfigRepository,
+  SessionRepository,
   SettingsRepository,
 } from '@aic/db';
-import type { EngineEvents, ProviderId, Settings } from '@aic/ipc';
+import type { EngineEvents, EngineInitParams, ProviderId, Settings } from '@aic/ipc';
 import type { Jobs } from './jobs';
 
 export interface Ready {
@@ -17,7 +18,9 @@ export interface Ready {
   profiles: ProfileRepository;
   knowledge: KnowledgeRepository;
   answers: AnswerRepository;
+  sessions: SessionRepository;
   settings: Settings;
+  init: Pick<EngineInitParams, 'appVersion' | 'fakeProvider' | 'nativeAudioPath' | 'audioReplay'>;
   providers: Record<ProviderId, AiProvider>;
 }
 

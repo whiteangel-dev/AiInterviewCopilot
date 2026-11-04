@@ -14,6 +14,18 @@ import type {
   ProfileSummary,
   TextQuality,
 } from './profile';
+import type {
+  AudioEnvironment,
+  LiveMeter,
+  LiveStartParams,
+  LiveState,
+  LiveSuggestion,
+  LiveTranscript,
+  LiveTranscriptUpdate,
+  SessionDetail,
+  SessionSummary,
+  TranscriptFormat,
+} from './live';
 import type { Settings, SettingsPatch } from './settings';
 import type { ApiKeyStatus, KeyVerification, ModelCatalog, ModelInfo, ProviderId } from './types';
 
@@ -28,6 +40,17 @@ export interface EngineInitParams {
   appVersion: string;
   /** Development and tests only: use a fake AI provider that needs no network. */
   fakeProvider: boolean;
+  /** The native audio module (`aic_native_audio.node`), or null if this build has none. */
+  nativeAudioPath: string | null;
+  /** Development and tests only: play these 16 kHz mono WAVs instead of capturing. */
+  audioReplay: { interviewer: string | null; candidate: string | null } | null;
+}
+
+/** Asks main to start Electron's built-in capture and connect it to the engine. */
+export interface CaptureRequest {
+  runId: string;
+  microphone: boolean;
+  system: boolean;
 }
 
 export interface EngineInitResult {
@@ -136,13 +159,65 @@ export type EngineMethods = {
   };
   'answers.delete': { params: { id: string }; result: void };
   'answers.match': { params: { profileId: string; question: string }; result: AnswerMatch[] };
+
+  // Live listening (Phase 3). One live run at a time: an interview or an audio test.
+  'audio.environment': { params: { refresh: boolean }; result: AudioEnvironment };
+  'live.start': { params: LiveStartParams; result: LiveState };
+  'live.pause': { params: void; result: LiveState | null };
+  'live.resume': { params: void; result: LiveState | null };
+  'live.stop': { params: void; result: LiveState | null };
+  'live.state': { params: void; result: LiveState | null };
+  /** The current run's transcript, for a window that opens mid-session. */
+  'live.transcript': { params: void; result: LiveTranscript | null };
+  /** A plain-text report for troubleshooting (no audio, no transcript text). */
+  'live.diagnostics': { params: void; result: string };
+  /** Electron's built-in capture failed to start or stopped (reported by main). */
+  'capture.failed': { params: { runId: string; message: string }; result: void };
+
+  'sessions.list': { params: void; result: SessionSummary[] };
+  'sessions.get': { params: { id: string }; result: SessionDetail };
+  'sessions.rename': { params: { id: string; title: string }; result: SessionSummary };
+  'sessions.delete': { params: { id: string }; result: void };
+  'sessions.export': {
+    params: { id: string; format: TranscriptFormat };
+    result: { fileName: string; text: string };
+  };
 };
 
 export type EngineEvents = {
   'settings.changed': Settings;
   'apiKey.changed': ApiKeyStatus;
   'job.progress': JobProgress;
+  /** null when no run is active. */
+  'live.state': LiveState | null;
+  'live.meter': LiveMeter;
+  'live.transcript': LiveTranscriptUpdate;
+  /** null clears the current suggestion. */
+  'live.suggestion': LiveSuggestion | null;
+  'capture.open': CaptureRequest;
+  'capture.close': { runId: string };
 };
+
+/** Main → engine messages that carry a MessagePort (outside the RPC protocol). */
+export interface EnginePortMessage {
+  kind: 'port';
+  purpose: 'capture';
+  runId: string;
+}
+
+/**
+ * What Electron's built-in capture page sends over its port: frames of 16 kHz
+ * mono PCM16 (20 ms each) and status changes per channel.
+ */
+export type CapturePortMessage =
+  | { kind: 'frame'; channel: 'interviewer' | 'candidate'; pcm: ArrayBuffer }
+  | {
+      kind: 'status';
+      channel: 'interviewer' | 'candidate';
+      status: 'opened' | 'ended' | 'error';
+      message: string;
+      device: string | null;
+    };
 
 /** Name of a provider's API key in main's OS-protected secret store. */
 export function apiKeySecretRef(provider: ProviderId): string {

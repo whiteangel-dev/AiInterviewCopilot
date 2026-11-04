@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { extname, join, normalize, sep } from 'node:path';
-import { protocol } from 'electron';
+import { protocol, type Protocol } from 'electron';
 
 /**
  * The packaged UI is served from `app://renderer/…` rather than `file://`, so it
@@ -66,8 +66,9 @@ export function resolveAppFile(root: string, requestUrl: string): string | null 
   return file.startsWith(base.endsWith(sep) ? base : base + sep) ? file : null;
 }
 
-export function handleAppProtocol(root: string): void {
-  protocol.handle(APP_SCHEME, async (request) => {
+/** Serves the UI on the default session, or on another session's `protocol`. */
+export function handleAppProtocol(root: string, target: Protocol = protocol): void {
+  target.handle(APP_SCHEME, async (request) => {
     const file = resolveAppFile(root, request.url);
     if (!file) return new Response('Forbidden', { status: 403 });
     try {

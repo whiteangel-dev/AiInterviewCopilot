@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { answerBankSystem } from './answers';
 import { compileBrief } from './brief';
 import { buildSessionContext } from './context';
+import { buildVocabulary } from './vocabulary';
 import { compileKnowledge } from './knowledge';
 import { toCandidateProfile, type ResumeExtraction } from './resume';
 import { dateRange, formatMonth } from './text';
@@ -125,5 +126,48 @@ describe('context and prompts', () => {
     expect(formatMonth('2015')).toBe('2015');
     expect(dateRange('2021-03', null, true)).toBe('Mar 2021 – present');
     expect(dateRange(null, null, false)).toBe('');
+  });
+});
+
+describe('buildVocabulary', () => {
+  it('collects names and terms from the profile and notes, most important first', () => {
+    const vocab = buildVocabulary(
+      {
+        ...EMPTY_PROFILE,
+        name: 'Jordan Rivera',
+        experience: [
+          {
+            company: 'Brightline Health',
+            title: 'Backend Engineer',
+            location: null,
+            start: '2021-03',
+            end: null,
+            current: true,
+            summary: '',
+            highlights: [],
+            technologies: ['Go', 'PostgreSQL', 'Kafka'],
+          },
+        ],
+        skills: [{ category: 'Languages', items: ['Go', 'TypeScript', 'postgresql'] }],
+        education: [
+          {
+            institution: 'UC Davis',
+            degree: null,
+            field: null,
+            start: null,
+            end: null,
+            details: null,
+          },
+        ],
+      },
+      [{ title: 'Why KestrelPay', content: 'They moved to gRPC and OAuth2 last year.' }],
+    );
+    expect(vocab.slice(0, 3)).toEqual(['Jordan', 'Rivera', 'Brightline Health']);
+    // Technologies used most come first; duplicates (any case) are dropped.
+    expect(vocab.indexOf('Go')).toBeLessThan(vocab.indexOf('Kafka'));
+    expect(vocab.filter((v) => v.toLowerCase() === 'postgresql')).toHaveLength(1);
+    expect(vocab).toEqual(expect.arrayContaining(['UC Davis', 'KestrelPay', 'gRPC', 'OAuth2']));
+    expect(vocab).not.toContain('They');
+    expect(buildVocabulary(null)).toEqual([]);
   });
 });

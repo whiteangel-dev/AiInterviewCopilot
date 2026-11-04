@@ -23,4 +23,7 @@ Write-Host $json
 $result = $json | ConvertFrom-Json
 if (-not $result.ok) { throw 'Smoke test failed' }
 if ($result.secureStorage -ne 'os') { throw "Expected OS secure storage, got $($result.secureStorage)" }
+# The native audio module must load from app.asar.unpacked (hosted runners have no audio devices).
+if (-not $result.nativeAudio) { throw "Native audio module did not load: $($result.nativeAudioError)" }
+if (-not ($result.nativeSources -contains 'microphone')) { throw 'Native audio module lacks WASAPI sources' }
 Write-Host "Smoke test passed in $($result.elapsedMs) ms"

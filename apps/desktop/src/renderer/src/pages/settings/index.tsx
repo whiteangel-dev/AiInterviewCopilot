@@ -4,6 +4,7 @@ import { useApp } from '../../store';
 import { AboutCard } from './about-card';
 import { AnswersCard, AppearanceCard } from './preferences-cards';
 import { ApiKeyCard } from './api-key-card';
+import { AudioLinkCard, CopilotCard, HotkeysCard } from './live-cards';
 import { ModelsCard } from './models-card';
 import { PrivacyCard } from './privacy-card';
 
@@ -24,6 +25,9 @@ export function SettingsPage() {
       <ApiKeyCard />
       <ModelsCard />
       <AnswersCard />
+      <AudioLinkCard />
+      <CopilotCard />
+      <HotkeysCard />
       <AppearanceCard />
       <PrivacyCard />
       <AboutCard />

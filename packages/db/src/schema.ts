@@ -1,5 +1,9 @@
 import type {
   AnswerCategory,
+  AudioChannel,
+  SessionAudioInfo,
+  SessionRecordStatus,
+  SessionStats,
   CandidateProfile,
   DocumentKind,
   KeyVerificationOutcome,
@@ -167,6 +171,58 @@ export const preparedAnswers = sqliteTable(
   (t) => [index('prepared_answers_profile_idx').on(t.profileId)],
 );
 
+// ── Interview sessions (Phase 3) ────────────────────────────────────────────
+
+/**
+ * One interview. Keeps a snapshot of what it used (profile and knowledge base
+ * names, the compiled answer context, the recognizer vocabulary), so it stays
+ * meaningful after the profile changes or is deleted.
+ */
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    title: text('title').notNull(),
+    status: text('status').$type<SessionRecordStatus>().notNull(),
+    profileId: text('profile_id').references(() => profiles.id, { onDelete: 'set null' }),
+    profileVersionId: text('profile_version_id').references(() => profileVersions.id, {
+      onDelete: 'set null',
+    }),
+    profileName: text('profile_name'),
+    knowledgeBaseId: text('knowledge_base_id').references(() => knowledgeBases.id, {
+      onDelete: 'set null',
+    }),
+    knowledgeBaseName: text('knowledge_base_name'),
+    context: text('context').notNull(),
+    vocabulary: text('vocabulary', { mode: 'json' }).$type<string[]>().notNull(),
+    audio: text('audio', { mode: 'json' }).$type<SessionAudioInfo>().notNull(),
+    stats: text('stats', { mode: 'json' }).$type<SessionStats>(),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at'),
+    /** Listening time, pauses excluded. */
+    durationMs: integer('duration_ms').notNull().default(0),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('sessions_started_idx').on(t.startedAt)],
+);
+
+/** Final transcript segments only (interim text is never stored). No audio is stored. */
+export const transcriptSegments = sqliteTable(
+  'transcript_segments',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    channel: text('channel').$type<AudioChannel>().notNull(),
+    text: text('text').notNull(),
+    startMs: integer('start_ms').notNull(),
+    endMs: integer('end_ms').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('transcript_segments_session_idx').on(t.sessionId, t.startMs)],
+);
+
 export type ProfileRow = typeof profiles.$inferSelect;
 export type ResumeDocumentRow = typeof resumeDocuments.$inferSelect;
 export type ProfileVersionRow = typeof profileVersions.$inferSelect;
@@ -174,3 +230,6 @@ export type KnowledgeBaseRow = typeof knowledgeBases.$inferSelect;
 export type KnowledgeItemRow = typeof knowledgeItems.$inferSelect;
 export type KnowledgeAnalysisRow = typeof knowledgeAnalyses.$inferSelect;
 export type PreparedAnswerRow = typeof preparedAnswers.$inferSelect;
+export type SessionRow = typeof sessions.$inferSelect;
+export type NewSession = typeof sessions.$inferInsert;
+export type TranscriptSegmentRow = typeof transcriptSegments.$inferSelect;

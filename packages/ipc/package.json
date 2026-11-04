@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./channels": "./src/channels.ts",
     "./errors": "./src/errors.ts",
+    "./hotkeys": "./src/hotkeys.ts",
     "./models": "./src/models.ts"
   },
   "sideEffects": false,

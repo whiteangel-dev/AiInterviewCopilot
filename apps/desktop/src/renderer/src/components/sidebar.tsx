@@ -1,20 +1,27 @@
 import {
+  AudioLines,
   FileText,
+  History,
   House,
   MessageSquareQuote,
   NotebookPen,
+  Radio,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
+import { isActive, useLive } from '../live-store';
 import { cn } from '../lib/utils';
 import { useApp, type Page } from '../store';
 import { Logo } from './logo';
 
 const NAV: { page: Page; label: string; icon: LucideIcon }[] = [
   { page: 'home', label: 'Home', icon: House },
+  { page: 'interview', label: 'Interview', icon: Radio },
+  { page: 'sessions', label: 'Sessions', icon: History },
   { page: 'profiles', label: 'Profiles', icon: FileText },
   { page: 'knowledge', label: 'Knowledge', icon: NotebookPen },
   { page: 'answers', label: 'Answer bank', icon: MessageSquareQuote },
+  { page: 'audio', label: 'Audio', icon: AudioLines },
   { page: 'settings', label: 'Settings', icon: Settings },
 ];
 
@@ -31,6 +38,8 @@ export function Sidebar() {
   const engine = useApp((s) => s.engine);
   const version = useApp((s) => s.info?.version);
   const label = ENGINE_LABEL[engine?.state ?? 'starting'];
+  const live = useLive((s) => s.state);
+  const liveInterview = live?.mode === 'interview' && isActive(live);
 
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
@@ -58,6 +67,16 @@ export function Sidebar() {
           >
             <Icon className="size-4" aria-hidden />
             {text}
+            {target === 'interview' && liveInterview && (
+              <span
+                className={cn(
+                  'ml-auto size-2 rounded-full',
+                  live.status === 'paused' ? 'bg-warning' : 'animate-pulse bg-destructive',
+                )}
+                aria-label={live.status === 'paused' ? 'Paused' : 'Live'}
+                data-testid="nav-live"
+              />
+            )}
           </button>
         ))}
       </nav>

@@ -74,3 +74,40 @@ export function matchQuestion<T extends Matchable>(
   }
   return results.sort((a, b) => b.score - a.score).slice(0, limit);
 }
+
+/**
+ * The parts of something an interviewer said that may be the question: the
+ * whole text, each sentence, and each sentence without a lead-in before its
+ * first comma ("To get started, can you tell me about yourself?").
+ */
+export function questionCandidates(heard: string): string[] {
+  const out = new Set<string>();
+  const add = (t: string) => {
+    const s = t.trim();
+    if (s.split(/\s+/).length >= 2) out.add(s);
+  };
+  add(heard);
+  for (const sentence of heard.match(/[^.?!]+[.?!]*/g) ?? []) {
+    add(sentence);
+    const comma = sentence.indexOf(',');
+    if (comma > 0) add(sentence.slice(comma + 1));
+  }
+  return [...out];
+}
+
+/**
+ * Matches live speech against prepared questions: the best score over all of
+ * `questionCandidates(heard)`, so lead-ins and small talk don't hide the question.
+ */
+export function matchHeard<T extends Matchable>(
+  heard: string,
+  items: readonly T[],
+  { minScore = CONFIDENT_MATCH } = {},
+): QuestionMatch<T> | null {
+  let best: QuestionMatch<T> | null = null;
+  for (const candidate of questionCandidates(heard)) {
+    const [m] = matchQuestion(candidate, items, { limit: 1, minScore });
+    if (m && (!best || m.score > best.score)) best = m;
+  }
+  return best;
+}

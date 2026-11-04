@@ -34,7 +34,7 @@ test('first run: setup steps, engine ready, encrypted database', async () => {
   try {
     await expect(page.getByTestId('engine-state')).toHaveAttribute('data-state', 'ready');
     const steps = page.getByTestId('setup-steps');
-    await expect(steps.getByText('0 of 4 done')).toBeVisible();
+    await expect(steps.getByText('0 of 5 done')).toBeVisible();
     await expect(steps.getByRole('button', { name: 'Add API key' })).toBeVisible();
     await screenshot(page, 'home-first-run');
 
@@ -77,7 +77,7 @@ test('API key: rejects a bad key, saves a good one, survives restart, never stor
 
   ({ app, page } = await launch(userData));
   try {
-    await expect(page.getByTestId('setup-steps').getByText('1 of 4 done')).toBeVisible();
+    await expect(page.getByTestId('setup-steps').getByText('1 of 5 done')).toBeVisible();
     await openSettings(page);
     const card = page.getByTestId('api-key-card');
     await expect(card.getByText('Verified')).toBeVisible();

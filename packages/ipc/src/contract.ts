@@ -3,6 +3,15 @@ import { PreparedAnswerFieldsSchema } from './answers';
 import type { EventChannel, InvokeChannel } from './channels';
 import type { EngineMethods } from './engine';
 import { KnowledgeItemFieldsSchema } from './knowledge';
+import type { HotkeyStatus } from './hotkeys';
+import {
+  LiveStartSchema,
+  TranscriptFormatSchema,
+  type LiveMeter,
+  type LiveState,
+  type LiveSuggestion,
+  type LiveTranscriptUpdate,
+} from './live';
 import { CandidateProfileSchema, type JobProgress } from './profile';
 import { SettingsPatchSchema, type Settings } from './settings';
 import {
@@ -102,6 +111,26 @@ export const invokeContract = {
   'answers:update': z.strictObject({ id: Id, fields: PreparedAnswerFieldsSchema }),
   'answers:delete': ById,
   'answers:match': z.strictObject({ profileId: Id, question: z.string().trim().min(1).max(1000) }),
+  'audio:environment': z.strictObject({ refresh: z.boolean() }),
+  'live:start': LiveStartSchema.extend({
+    profileId: Id.nullable(),
+    knowledgeBaseId: Id.nullable(),
+  }),
+  'live:pause': NoInput,
+  'live:resume': NoInput,
+  'live:stop': NoInput,
+  'live:state': NoInput,
+  'live:transcript': NoInput,
+  'live:diagnostics': NoInput,
+  'sessions:list': NoInput,
+  'sessions:get': ById,
+  'sessions:rename': z.strictObject({ id: Id, title: z.string().trim().min(1).max(120) }),
+  'sessions:delete': ById,
+  'sessions:saveTranscript': z.strictObject({ id: Id, format: TranscriptFormatSchema }),
+  'app:copyText': z.string().max(500_000),
+  'copilot:setVisible': z.strictObject({ visible: z.boolean() }),
+  'copilot:getVisible': NoInput,
+  'hotkeys:status': NoInput,
 } satisfies Record<InvokeChannel, z.ZodType>;
 
 /**
@@ -136,6 +165,18 @@ export const FORWARDED_CHANNELS = {
   'answers:update': 'answers.update',
   'answers:delete': 'answers.delete',
   'answers:match': 'answers.match',
+  'audio:environment': 'audio.environment',
+  'live:start': 'live.start',
+  'live:pause': 'live.pause',
+  'live:resume': 'live.resume',
+  'live:stop': 'live.stop',
+  'live:state': 'live.state',
+  'live:transcript': 'live.transcript',
+  'live:diagnostics': 'live.diagnostics',
+  'sessions:list': 'sessions.list',
+  'sessions:get': 'sessions.get',
+  'sessions:rename': 'sessions.rename',
+  'sessions:delete': 'sessions.delete',
 } as const satisfies Partial<Record<InvokeChannel, keyof EngineMethods>>;
 
 export type ForwardedChannel = keyof typeof FORWARDED_CHANNELS;
@@ -166,6 +207,11 @@ export interface InvokeOutputs extends ForwardedOutputs {
   'apiKey:verify': ApiKeyStatus;
   'apiKey:remove': ApiKeyStatus;
   'models:list': ModelCatalog;
+  'sessions:saveTranscript': { saved: boolean };
+  'app:copyText': void;
+  'copilot:setVisible': boolean;
+  'copilot:getVisible': boolean;
+  'hotkeys:status': HotkeyStatus[];
 }
 
 export type InvokeInput<C extends InvokeChannel> = z.input<(typeof invokeContract)[C]>;
@@ -177,6 +223,12 @@ export interface EventPayloads {
   'settings:changed': Settings;
   'apiKey:changed': ApiKeyStatus;
   'job:progress': JobProgress;
+  'live:state': LiveState | null;
+  'live:meter': LiveMeter;
+  'live:transcript': LiveTranscriptUpdate;
+  'live:suggestion': LiveSuggestion | null;
+  'copilot:visibility': boolean;
+  'hotkeys:status': HotkeyStatus[];
 }
 
 // Each forwarded channel's validated input must be what its engine method takes.

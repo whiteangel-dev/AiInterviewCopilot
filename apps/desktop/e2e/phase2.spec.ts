@@ -65,7 +65,7 @@ test('resume: import a PDF, review what was not found, edit, save, see history',
     await expect(page.getByText('Pinecrest Labs')).toBeVisible();
 
     await nav(page, 'Home');
-    await expect(page.getByTestId('setup-steps').getByText('2 of 4 done')).toBeVisible();
+    await expect(page.getByTestId('setup-steps').getByText('2 of 5 done')).toBeVisible();
   } finally {
     await app.close();
   }

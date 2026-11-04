@@ -64,6 +64,13 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/native-audio
+      - name: Native audio module (WASAPI)
+        run: npm run build -w @aic/native-audio
       - run: npm test
       - run: npm run build
       - name: End-to-end tests (real DPAPI)
@@ -128,14 +135,18 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: spikes/native-audio
+        working-directory: packages/native-audio
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Rust toolchain
-        run: rustup toolchain install stable --profile minimal --component clippy && rustup default stable
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/native-audio
+      - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - run: npm run build

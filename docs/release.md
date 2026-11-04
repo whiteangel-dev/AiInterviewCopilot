@@ -4,19 +4,22 @@
 
 ```
 npm install
+npm run build -w @aic/native-audio  # native audio module (Rust) → apps/desktop/resources/native/
 npm run build                    # electron-vite → apps/desktop/out
 npm run dist:win                 # Windows installer → apps/desktop/dist (run on Windows)
 npm run dist:dir -w @aic/desktop # unpacked app for the current OS (quick check)
 ```
 
+A Windows release must include the native audio module. Building it needs Rust (stable, MSVC); it links the C runtime statically, so users need no Visual C++ redistributable. An installer built without it still works, with Electron's built-in capture only.
+
 The installer is a per-user NSIS installer (`AI-Interview-Copilot-Setup-<version>-x64.exe`). It doesn't need admin rights.
 
 ## CI
 
-Every push to `main` builds the installer on `windows-latest`, then:
+Every push to `main` builds the native audio module and the installer on `windows-latest`, then:
 - runs the unit and end-to-end tests with real Windows DPAPI;
 - smoke-tests the unpacked app;
-- installs the app silently and smoke-tests the installed copy.
+- installs the app silently and smoke-tests the installed copy. The smoke test fails if the native audio module doesn't load.
 
 The installer is uploaded as the `windows-installer` artifact of the run.
 

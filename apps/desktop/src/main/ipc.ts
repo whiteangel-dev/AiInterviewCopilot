@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, type IpcMainInvokeEvent } from 'electron';
+import { BrowserWindow, ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import { redact, type Logger } from '@aic/core';
 import {
   AppError,
@@ -57,8 +57,16 @@ export function registerInvokeHandlers(
   }
 }
 
+/** Windows without the app bridge (the hidden capture window) get no events. */
+const noBroadcast = new WeakSet<WebContents>();
+
+export function excludeFromBroadcast(contents: WebContents): void {
+  noBroadcast.add(contents);
+}
+
 export function broadcast<E extends EventChannel>(event: E, payload: EventPayloads[E]): void {
   for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) win.webContents.send(IPC_PREFIX + event, payload);
+    if (win.isDestroyed() || noBroadcast.has(win.webContents)) continue;
+    win.webContents.send(IPC_PREFIX + event, payload);
   }
 }

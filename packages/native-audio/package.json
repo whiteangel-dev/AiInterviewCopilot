@@ -1,0 +1,12 @@
+{
+  "name": "@aic/native-audio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Native audio capture (Rust, napi-rs; WASAPI on Windows): 20 ms frames of 16 kHz mono PCM16.",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "cargo test",
+    "smoke": "node smoke.mjs"
+  }
+}

@@ -29,6 +29,8 @@ async function setup(
     logDir: join(dir, 'logs'),
     appVersion: '0.0.0-test',
     fakeProvider: true,
+    nativeAudioPath: null,
+    audioReplay: null,
   };
   const h = engine.handlers;
   await h.init(params);

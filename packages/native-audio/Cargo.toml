@@ -2,7 +2,7 @@
 name = "aic-native-audio"
 version = "0.1.0"
 edition = "2024"
-description = "AI Interview Copilot native audio capture (Phase 0 spike, Option B)"
+description = "AI Interview Copilot native audio capture (napi-rs, WASAPI on Windows)"
 publish = false
 
 [lib]
@@ -17,6 +17,14 @@ napi-build = "2.6.0"
 
 [target."cfg(windows)".dependencies]
 wasapi = "0.26.0"
+# Same version as wasapi's own dependency, so the COM types are shared.
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Media_Audio",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Diagnostics_ToolHelp",
+] }
 
 [profile.release]
 lto = true
