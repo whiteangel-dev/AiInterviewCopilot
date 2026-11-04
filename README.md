@@ -15,6 +15,8 @@ A Windows app that listens to your job interview and, about a second after each 
    - click **Get a free key**;
    - in Google AI Studio, click **Create API key** and copy it;
    - paste it back in the app and click **Connect**.
+
+   If someone gave you a **key file** instead, click **Someone gave you a key file? Import it**, choose the file, and type the password they sent you.
 2. **Add your resume.** Go to **Profiles → Import resume** (PDF or Word), and check what it found.
 3. **Optional:**
    - **Knowledge**: add what's not on your resume (project stories, salary expectations, the company you're applying to);
@@ -25,6 +27,12 @@ A Windows app that listens to your job interview and, about a second after each 
    - `Ctrl+Alt+Enter` answers right away.
 
 **Your data:** your resume, notes and transcripts stay on your computer, and no audio is saved.
+
+**Sharing your key:** to let someone use the app with your key, go to Settings → **Share your key** → **Create key file**:
+- set a password and, if you like, an end date, then send them the file;
+- send the password another way (by phone, for example).
+
+The app never shows them the key, but it can't make the key secret from them. Give each person their own key from Google AI Studio, and delete it when they're done.
 
 **Free keys:** everything the copilot does live works on Google's free tier, within its usage limits. A key with billing on is faster to prepare (it uses Google's strongest model) and has higher limits: about $0.57 per interview hour, estimated.
 

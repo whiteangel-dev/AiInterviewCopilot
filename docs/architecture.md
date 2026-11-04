@@ -162,6 +162,7 @@ The database key is 256 random bits created on first run and kept in main's secr
 ## 8. Security and privacy
 
 - **API keys:** stored only through the OS keychain and used only in the engine process. Never in the database, logs or renderers.
+- **Sharing a key:** an encrypted key file (AES-256-GCM, scrypt password) with an optional end date. The key is never displayed after import, but anyone running the app could recover it, so each person should get their own revocable key ([ADR 0013](adr/0013-key-files.md)).
 - **No raw audio** is stored by default. Transcripts have retention controls; export and wipe-all are available.
 - **Electron hardening:**
   - sandbox and `contextIsolation`;

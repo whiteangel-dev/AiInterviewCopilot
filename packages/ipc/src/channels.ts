@@ -17,6 +17,8 @@ export const INVOKE_CHANNELS = [
   'apiKey:save',
   'apiKey:verify',
   'apiKey:remove',
+  'apiKey:importFile',
+  'apiKey:createFile',
   'models:list',
   // Forwarded to the engine as-is (see FORWARDED_CHANNELS in contract.ts).
   'jobs:cancel',

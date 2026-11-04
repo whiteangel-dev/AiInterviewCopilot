@@ -1,15 +1,36 @@
-import { Eye, EyeOff, KeyRound, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Eye, EyeOff, FileKey2, KeyRound, Share2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { CreateKeyFileDialog, KeyFileImport } from '../../components/key-file';
 import { ConfirmDialog } from '../../components/ui/alert-dialog';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Card, CardBody, CardHeader } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
 import { invoke } from '../../lib/api';
-import { errorMessage, timeAgo } from '../../lib/utils';
+import { dateText, errorMessage, timeAgo } from '../../lib/utils';
 import { useApp } from '../../store';
 
 const AI_STUDIO_KEYS_URL = 'https://aistudio.google.com/apikey';
+
+/** For the key's owner: give someone access through an encrypted key file. */
+export function ShareKeyCard() {
+  const [open, setOpen] = useState(false);
+  return (
+    <Card id="share-key">
+      <CardHeader
+        icon={<Share2 />}
+        title="Share your key"
+        description="Let someone else use the app with your Gemini key, without sending the key in plain text: an encrypted key file plus a password you send separately."
+        action={
+          <Button size="sm" variant="secondary" onClick={() => setOpen(true)}>
+            Create key file
+          </Button>
+        }
+      />
+      <CreateKeyFileDialog open={open} onOpenChange={setOpen} />
+    </Card>
+  );
+}
 
 export function ApiKeyCard() {
   const status = useApp((s) => s.apiKey);
@@ -22,6 +43,7 @@ export function ApiKeyCard() {
   const [reveal, setReveal] = useState(false);
   const [busy, setBusy] = useState<'save' | 'check' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const configured = !!status?.configured;
   const showForm = !configured || editing;
@@ -73,6 +95,8 @@ export function ApiKeyCard() {
 
   const badge = !configured ? (
     <Badge>Not set</Badge>
+  ) : status.expired ? (
+    <Badge tone="danger">Expired</Badge>
   ) : status.verification === 'valid' ? (
     <Badge tone="success">Verified</Badge>
   ) : status.verification === 'invalid' ? (
@@ -114,6 +138,23 @@ export function ApiKeyCard() {
                   ? `Checked ${timeAgo(status.checkedAt)}`
                   : (status.message ?? 'Not checked yet')}
               </p>
+              {status.source === 'file' && (
+                <p
+                  className={
+                    status.expired
+                      ? 'mt-0.5 flex items-center gap-1.5 text-[13px] text-destructive'
+                      : 'mt-0.5 flex items-center gap-1.5 text-[13px] text-muted-foreground'
+                  }
+                  data-testid="key-origin"
+                >
+                  <FileKey2 className="size-3.5" aria-hidden />
+                  From a key file{status.label ? ` (${status.label})` : ''}
+                  {status.expiresAt &&
+                    (status.expired
+                      ? `, expired on ${dateText(status.expiresAt)}`
+                      : `, works until ${dateText(status.expiresAt)}`)}
+                </p>
+              )}
             </div>
             <Button
               variant="secondary"
@@ -223,6 +264,16 @@ export function ApiKeyCard() {
               . We check it with Google before saving.
             </p>
           </form>
+        )}
+
+        {(showForm || importing) && (
+          <div className="space-y-2 border-t border-border pt-4">
+            <div className="text-sm font-medium">Have a key file?</div>
+            <p className="text-[13px] text-muted-foreground">
+              If someone gave you a key file, choose it and enter the password they sent you.
+            </p>
+            <KeyFileImport onDone={() => setImporting(false)} />
+          </div>
         )}
 
         <p className="flex items-start gap-2 text-[13px] text-muted-foreground">

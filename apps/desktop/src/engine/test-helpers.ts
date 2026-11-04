@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { encodeWav, tone } from '@aic/core';
-import type { EngineEvents } from '@aic/ipc';
+import type { EngineEvents, EngineInitParams } from '@aic/ipc';
 import { createEngine } from './engine';
 
 export const KEY = 'AIza-unit-test-key-000000000wxyz';
@@ -35,6 +35,8 @@ export function speechWav(
 
 export async function setup(
   replay: { interviewer: string | null; candidate: string | null } | null,
+  /** Reopen an earlier engine's data (a restart). */
+  reuse?: EngineInitParams,
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'aic-p3-'));
   dirs.push(dir);
@@ -46,7 +48,7 @@ export async function setup(
     today: () => '2026-11-04',
   });
   const h = engine.handlers;
-  const init = {
+  const init: EngineInitParams = reuse ?? {
     dbPath: join(dir, 'app.db'),
     dbKeyHex: randomBytes(32).toString('hex'),
     backupDir: join(dir, 'bk'),

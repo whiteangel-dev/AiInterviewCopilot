@@ -47,6 +47,10 @@ export const providerConfigs = sqliteTable('provider_configs', {
   checkedAt: integer('checked_at'),
   modelCatalog: text('model_catalog', { mode: 'json' }).$type<ModelInfo[]>(),
   modelsFetchedAt: integer('models_fetched_at'),
+  /** Typed in, or imported from a key file (Phase 6). */
+  keySource: text('key_source').$type<'typed' | 'file'>().notNull().default('typed'),
+  keyLabel: text('key_label'),
+  keyExpiresAt: integer('key_expires_at'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

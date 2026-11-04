@@ -47,6 +47,9 @@ const Id = z.string().regex(/^[0-9a-f-]{8,64}$/i, 'Invalid ID');
 const JobId = z.string().regex(/^[\w-]{8,64}$/, 'Invalid job ID');
 const ById = z.strictObject({ id: Id });
 
+/** Key files are a few hundred bytes. */
+export const MAX_KEY_FILE_BYTES = 64 * 1024;
+
 /** Resumes larger than this are rejected before they reach the engine. */
 export const MAX_RESUME_BYTES = 10 * 1024 * 1024;
 
@@ -66,6 +69,20 @@ export const invokeContract = {
   'apiKey:save': z.strictObject({ provider: ProviderIdSchema, key: ApiKeySchema }),
   'apiKey:verify': Provider,
   'apiKey:remove': Provider,
+  'apiKey:importFile': z.strictObject({
+    provider: ProviderIdSchema,
+    data: z
+      .instanceof(Uint8Array)
+      .refine((d) => d.byteLength > 0 && d.byteLength <= MAX_KEY_FILE_BYTES, 'Not a key file.'),
+    password: z.string().min(1, 'Enter the password.').max(200),
+  }),
+  'apiKey:createFile': z.strictObject({
+    provider: ProviderIdSchema,
+    key: ApiKeySchema,
+    password: z.string().min(8, 'Use a password of at least 8 characters.').max(200),
+    label: z.string().trim().max(80),
+    expiresAt: z.number().int().positive().nullable(),
+  }),
   'models:list': z.strictObject({ provider: ProviderIdSchema, refresh: z.boolean() }),
 
   'jobs:cancel': z.strictObject({ jobId: JobId }),
@@ -227,6 +244,8 @@ export interface InvokeOutputs extends ForwardedOutputs {
   'apiKey:save': ApiKeyStatus;
   'apiKey:verify': ApiKeyStatus;
   'apiKey:remove': ApiKeyStatus;
+  'apiKey:importFile': ApiKeyStatus;
+  'apiKey:createFile': { saved: boolean };
   'models:list': ModelCatalog;
   'sessions:saveTranscript': { saved: boolean };
   'app:copyText': void;

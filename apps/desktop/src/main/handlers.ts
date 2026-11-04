@@ -11,10 +11,13 @@ import {
   apiKeySecretRef,
   type AppInfo,
   type ForwardedChannel,
+  type KeyOrigin,
+  type ProviderId,
 } from '@aic/ipc';
 import type { CopilotWindow } from './copilot-window';
 import type { EngineHost } from './engine-host';
 import type { Hotkeys } from './hotkeys';
+import { KEY_FILE_EXTENSION, createKeyFile, expiryText, readKeyFile } from './key-file';
 import { broadcast, type InvokeHandlers } from './ipc';
 import type { AppPaths } from './paths';
 import type { SecretStore } from './secret-store';
@@ -61,6 +64,26 @@ export function createInvokeHandlers({
   updates,
   mainWindow,
 }: Context): InvokeHandlers {
+  /** Checks a key with Google, keeps it in the OS-protected store and makes it active. */
+  const saveKey = async (provider: ProviderId, key: string, origin: KeyOrigin) => {
+    if (secrets.level === 'unavailable') {
+      throw new AppError(
+        'secure_storage_unavailable',
+        "This system's secure storage isn't available, so the key can't be saved safely.",
+      );
+    }
+    const { verification, models } = await host.call(
+      'apiKey.verify',
+      { provider, key },
+      PROVIDER_CALL,
+    );
+    if (verification.outcome === 'invalid') {
+      throw new AppError('invalid_api_key', verification.message ?? 'Google rejected this key.');
+    }
+    await secrets.set(apiKeySecretRef(provider), key);
+    return host.call('apiKey.activate', { provider, key, verification, models, origin });
+  };
+
   return {
     ...forwardedHandlers(host),
 
@@ -111,23 +134,53 @@ export function createInvokeHandlers({
 
     'apiKey:getStatus': ({ provider }) => host.call('apiKey.status', { provider }),
 
-    'apiKey:save': async ({ provider, key }) => {
-      if (secrets.level === 'unavailable') {
+    'apiKey:save': ({ provider, key }) =>
+      saveKey(provider, key, { source: 'typed', label: null, expiresAt: null }),
+
+    'apiKey:importFile': async ({ provider, data, password }) => {
+      const file = await readKeyFile(data, password);
+      if (file.expiresAt !== null && Date.now() > file.expiresAt) {
         throw new AppError(
-          'secure_storage_unavailable',
-          "This system's secure storage isn't available, so the key can't be saved safely.",
+          'invalid_input',
+          `This key file expired on ${expiryText(file.expiresAt)}. Ask for a new one.`,
         );
       }
-      const { verification, models } = await host.call(
-        'apiKey.verify',
-        { provider, key },
-        PROVIDER_CALL,
-      );
+      log.info('importing a key file', { expires: file.expiresAt !== null });
+      return saveKey(provider, file.key, {
+        source: 'file',
+        label: file.label || null,
+        expiresAt: file.expiresAt,
+      });
+    },
+
+    'apiKey:createFile': async ({ provider, key, password, label, expiresAt }) => {
+      // Don't hand out a key that doesn't work.
+      const { verification } = await host.call('apiKey.verify', { provider, key }, PROVIDER_CALL);
       if (verification.outcome === 'invalid') {
         throw new AppError('invalid_api_key', verification.message ?? 'Google rejected this key.');
       }
-      await secrets.set(apiKeySecretRef(provider), key);
-      return host.call('apiKey.activate', { provider, key, verification, models });
+      const bytes = await createKeyFile({ key, label, expiresAt }, password);
+      const slug = label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40);
+      const options = {
+        title: 'Save key file',
+        defaultPath: join(
+          app.getPath('documents'),
+          `gemini-key${slug ? `-${slug}` : ''}.${KEY_FILE_EXTENSION}`,
+        ),
+        filters: [{ name: 'Key file', extensions: [KEY_FILE_EXTENSION] }],
+      };
+      const parent = mainWindow() ?? BrowserWindow.getFocusedWindow();
+      const result = parent
+        ? await dialog.showSaveDialog(parent, options)
+        : await dialog.showSaveDialog(options);
+      if (result.canceled || !result.filePath) return { saved: false };
+      await writeFile(result.filePath, bytes);
+      log.info('key file created', { expires: expiresAt !== null });
+      return { saved: true };
     },
 
     'apiKey:verify': ({ provider }) => host.call('apiKey.recheck', { provider }, PROVIDER_CALL),

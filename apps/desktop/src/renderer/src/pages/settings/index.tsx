@@ -3,7 +3,7 @@ import { Page } from '../../components/page';
 import { useApp } from '../../store';
 import { AboutCard } from './about-card';
 import { AnswersCard, AppearanceCard } from './preferences-cards';
-import { ApiKeyCard } from './api-key-card';
+import { ApiKeyCard, ShareKeyCard } from './api-key-card';
 import { AudioLinkCard, CopilotCard, HotkeysCard } from './live-cards';
 import { ModelsCard } from './models-card';
 import { PrivacyCard } from './privacy-card';
@@ -23,6 +23,7 @@ export function SettingsPage() {
   return (
     <Page title="Settings" description="Changes are saved automatically.">
       <ApiKeyCard />
+      <ShareKeyCard />
       <ModelsCard />
       <AnswersCard />
       <AudioLinkCard />

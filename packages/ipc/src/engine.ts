@@ -29,7 +29,14 @@ import type {
   TranscriptFormat,
 } from './live';
 import type { Settings, SettingsPatch } from './settings';
-import type { ApiKeyStatus, KeyVerification, ModelCatalog, ModelInfo, ProviderId } from './types';
+import type {
+  ApiKeyStatus,
+  KeyOrigin,
+  KeyVerification,
+  ModelCatalog,
+  ModelInfo,
+  ProviderId,
+} from './types';
 
 /** Main → engine RPC. Both ends are our own code, so params are not re-validated. */
 
@@ -82,6 +89,8 @@ export type EngineMethods = {
     params: ProviderKeyParams & {
       verification: KeyVerification | null;
       models: ModelInfo[] | null;
+      /** Given when a key is newly saved; at startup the stored origin is kept. */
+      origin?: KeyOrigin;
     };
     result: ApiKeyStatus;
   };

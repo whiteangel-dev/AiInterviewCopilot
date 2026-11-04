@@ -1,4 +1,4 @@
-import type { KeyVerification, ModelInfo, ProviderId } from '@aic/ipc';
+import type { KeyOrigin, KeyVerification, ModelInfo, ProviderId } from '@aic/ipc';
 import { eq } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import type { Db } from '../open';
@@ -33,10 +33,14 @@ export class ProviderConfigRepository {
     key: { ref: string; hint: string },
     verification: KeyVerification | null,
     models: ModelInfo[] | null,
+    origin: KeyOrigin = { source: 'typed', label: null, expiresAt: null },
   ): ProviderConfigRow {
     return this.#upsert(provider, {
       keyRef: key.ref,
       keyHint: key.hint,
+      keySource: origin.source,
+      keyLabel: origin.label,
+      keyExpiresAt: origin.expiresAt,
       verification: verification?.outcome ?? 'unverified',
       verificationMessage: verification?.message ?? null,
       checkedAt: verification?.checkedAt ?? null,
@@ -61,6 +65,9 @@ export class ProviderConfigRepository {
     return this.#upsert(provider, {
       keyRef: null,
       keyHint: null,
+      keySource: 'typed',
+      keyLabel: null,
+      keyExpiresAt: null,
       verification: 'unverified',
       verificationMessage: null,
       checkedAt: null,

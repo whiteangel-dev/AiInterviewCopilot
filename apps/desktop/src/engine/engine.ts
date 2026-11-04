@@ -77,15 +77,26 @@ export function createEngine(deps: EngineDeps): {
     return state;
   };
 
+  /** A key file's end date, per provider (null: none). */
+  const expiries = new Map<ProviderId, number | null>();
+
   const requireKey = (provider: ProviderId): string => {
     const key = keys.get(provider);
     if (!key) throw new AppError('no_api_key', 'Add your Gemini API key in Settings first.');
+    const expiresAt = expiries.get(provider);
+    if (expiresAt && Date.now() > expiresAt) {
+      throw new AppError(
+        'invalid_api_key',
+        `The key file you imported expired on ${new Date(expiresAt).toLocaleDateString('en-US', { dateStyle: 'medium' })}. Ask for a new one, or add your own key.`,
+      );
+    }
     return key;
   };
 
   const keyStatus = (provider: ProviderId): ApiKeyStatus => {
     const row = ready().providerRepo.get(provider);
     const configured = keys.has(provider);
+    const expiresAt = configured ? (row?.keyExpiresAt ?? null) : null;
     return {
       provider,
       configured,
@@ -93,6 +104,10 @@ export function createEngine(deps: EngineDeps): {
       verification: configured ? (row?.verification ?? 'unverified') : 'unverified',
       message: configured ? (row?.verificationMessage ?? null) : null,
       checkedAt: configured ? (row?.checkedAt ?? null) : null,
+      source: configured ? (row?.keySource ?? 'typed') : 'typed',
+      label: configured ? (row?.keyLabel ?? null) : null,
+      expiresAt,
+      expired: expiresAt !== null && Date.now() > expiresAt,
     };
   };
 
@@ -201,7 +216,7 @@ export function createEngine(deps: EngineDeps): {
       return result;
     },
 
-    'apiKey.activate'({ provider, key, verification, models }) {
+    'apiKey.activate'({ provider, key, verification, models, origin }) {
       const s = ready();
       const previous = keys.get(provider);
       if (previous && previous !== key) unregisterSecret(previous);
@@ -213,14 +228,16 @@ export function createEngine(deps: EngineDeps): {
       const hint = key.slice(-4);
       const row = s.providerRepo.get(provider);
       // At startup (no verification) keep the stored status unless the key changed.
-      if (verification || !row || row.keyHint !== hint || !row.keyRef) {
+      if (verification || origin || !row || row.keyHint !== hint || !row.keyRef) {
         s.providerRepo.setKey(
           provider,
           { ref: apiKeySecretRef(provider), hint },
           verification,
           models,
+          origin,
         );
       }
+      expiries.set(provider, s.providerRepo.get(provider)?.keyExpiresAt ?? null);
       return verification ? changed(provider) : keyStatus(provider);
     },
 
@@ -241,6 +258,7 @@ export function createEngine(deps: EngineDeps): {
       const key = keys.get(provider);
       if (key) unregisterSecret(key);
       keys.delete(provider);
+      expiries.delete(provider);
       forgetUnavailableModels();
       s.providerRepo.clearKey(provider);
       return changed(provider);

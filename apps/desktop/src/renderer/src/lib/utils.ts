@@ -20,3 +20,8 @@ export function timeAgo(epochMs: number, now = Date.now()): string {
   if (abs < 86_400) return relative.format(Math.round(seconds / 3600), 'hour');
   return relative.format(Math.round(seconds / 86_400), 'day');
 }
+
+/** "Nov 30, 2026" */
+export function dateText(ms: number): string {
+  return new Date(ms).toLocaleDateString('en-US', { dateStyle: 'medium' });
+}

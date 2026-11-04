@@ -37,6 +37,16 @@ Decisions: [ADR 0012](../adr/0012-distribution.md).
 
 For later versions: change the version in `apps/desktop/package.json`, commit, and push a matching tag (`git tag v1.0.1 && git push origin v1.0.1`). See [release.md](../release.md).
 
+## Added in 1.1.0: key files
+
+Share your Gemini key with someone without sending it in plain text ([ADR 0013](../adr/0013-key-files.md)):
+- **You:** Settings → **Share your key** → **Create key file**. Enter the key to share, who it's for, a password and an optional end date, then send the file.
+- **Them:** Home → **Someone gave you a key file? Import it**, choose the file and type the password (sent separately).
+- **After import:** the key is stored protected by Windows and never shown. After the end date the app stops using it.
+- **Tests:** 4 unit tests (encryption round trip, wrong password, a changed file, uniqueness, expiry in the engine) and an end-to-end test with two separate installs (one creates, the other imports).
+
+The app must send the key to Google, so someone with technical skill could still recover it. Give each person their own key in Google AI Studio and delete it when they're done; that is the dependable way to end access.
+
 ## Known limitations
 
 - **SmartScreen warning:** Windows warns about an unknown publisher until the app is code-signed, for example with Azure Trusted Signing (about $10 a month). Users click **More info → Run anyway**.

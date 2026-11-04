@@ -1,8 +1,9 @@
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, FileKey2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { invoke } from '../lib/api';
 import { errorMessage } from '../lib/utils';
 import { useApp } from '../store';
+import { KeyFileImport } from './key-file';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 
@@ -18,6 +19,7 @@ export function QuickKey() {
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fromFile, setFromFile] = useState(false);
 
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -80,6 +82,24 @@ export function QuickKey() {
         Free keys work: everything the copilot does live runs on Google's free tier, within its
         usage limits. Your key stays on this computer.
       </p>
+      <div className="border-t border-border pt-3">
+        {fromFile ? (
+          <div className="space-y-2">
+            <p className="text-[13px] text-muted-foreground">
+              Choose the key file you were given, then enter the password that came with it.
+            </p>
+            <KeyFileImport />
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-[13px] font-medium text-primary hover:underline"
+            onClick={() => setFromFile(true)}
+          >
+            <FileKey2 className="size-3.5" aria-hidden /> Someone gave you a key file? Import it
+          </button>
+        )}
+      </div>
     </div>
   );
 }

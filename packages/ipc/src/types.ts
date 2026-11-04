@@ -43,6 +43,20 @@ export interface ApiKeyStatus {
   verification: KeyVerificationOutcome;
   message: string | null;
   checkedAt: number | null;
+  /** `file`: imported from an encrypted key file someone gave you. */
+  source: KeyOrigin['source'];
+  /** The key file's label ("For Alex"). */
+  label: string | null;
+  /** After this (epoch ms) the app stops using a key file's key. */
+  expiresAt: number | null;
+  expired: boolean;
+}
+
+/** Where the active key came from. */
+export interface KeyOrigin {
+  source: 'typed' | 'file';
+  label: string | null;
+  expiresAt: number | null;
 }
 
 /** How API keys and the database key are protected at rest. */
