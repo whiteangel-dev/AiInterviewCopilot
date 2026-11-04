@@ -30,6 +30,7 @@ Decisions: [ADR 0011](../adr/0011-hardening.md).
 | Whole engine, real Gemini, 17 spoken questions | **17/17 correct**, 0 withdrawn. Last word → first answer word **p50 1.23 s, p95 1.46 s**; Phase 4's slowest-answer figure (p95) was 1.44–1.87 s |
 | Fact check, real Gemini | **17/18 planted claims caught, 0/15 false alarms** on grounded answers, 0.87 s median. In the live run it flagged 3 real small embellishments the answer model made |
 | Echo, real Gemini | Interviewer words in the candidate transcript: 6 → 1 (only "Hi Jordan." before the filter had learned). The candidate's answer was transcribed word for word either way |
+| CI ([run 41860194682](https://github.com/whiteangel-dev/AiInterviewCopilot/actions/runs/41860194682)) | All jobs pass, including Windows unit and e2e tests (18 of 18) and the installer |
 
 ### Probes that shaped the design
 
