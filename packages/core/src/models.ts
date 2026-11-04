@@ -36,6 +36,8 @@ const FALLBACK_FAMILY: Record<ModelRole, RegExp> = {
   turnAnalyzer: /^gemini-\d+(?:\.\d+)?-flash-lite(?:-preview)?$/,
   answerFast: /^gemini-\d+(?:\.\d+)?-flash-lite(?:-preview)?$/,
   answerQuality: /^gemini-\d+(?:\.\d+)?-pro(?:-preview)?$/,
+  liveBackup: /^gemini-\d+(?:\.\d+)?-flash-lite(?:-preview)?$/,
+  factCheck: /^gemini-\d+(?:\.\d+)?-flash-lite(?:-preview)?$/,
   preparation: /^gemini-\d+(?:\.\d+)?-pro(?:-preview)?$/,
 };
 
@@ -44,6 +46,8 @@ const FALLBACK_FAMILY: Record<ModelRole, RegExp> = {
  * measured in Phase 0, so they win whenever available; a newer model is not
  * assumed to be faster (gemini-3.8-flash was 3.6× slower to first token than
  * gemini-3.5-flash-lite). Otherwise the newest model of the same family is used.
+ * The live backup prefers a model other than the Fast answer model, so one
+ * rate limit or outage doesn't take out both.
  */
 export function recommendModels(models: readonly ModelInfo[]): Partial<ModelRoles> {
   const out: Partial<ModelRoles> = {};
@@ -51,11 +55,14 @@ export function recommendModels(models: readonly ModelInfo[]): Partial<ModelRole
     const kind: ModelKind = MODEL_ROLE_KIND[role];
     const fallback = FALLBACK_FAMILY[role];
     const candidates = models.filter((m) => m.kind === kind).map((m) => m.id);
-    if (candidates.includes(DEFAULT_MODELS[role])) {
+    const sameAsFast = role === 'liveBackup' && DEFAULT_MODELS[role] === out.answerFast;
+    if (candidates.includes(DEFAULT_MODELS[role]) && !sameAsFast) {
       out[role] = DEFAULT_MODELS[role];
       continue;
     }
-    const best = candidates.filter((id) => fallback.test(id)).sort(compareNewest)[0];
+    const family = candidates.filter((id) => fallback.test(id)).sort(compareNewest);
+    const best =
+      role === 'liveBackup' ? (family.find((id) => id !== out.answerFast) ?? family[0]) : family[0];
     if (best) out[role] = best;
   }
   return out;

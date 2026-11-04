@@ -69,6 +69,24 @@ export function fakeLiveAnswer(input: string): string {
   return "Here's how I'd think about that.\n- I'd start by making sure I understand the goal.\n- Then I'd walk through a real example from my work.";
 }
 
+/**
+ * A fact-check verdict (JSON) for the input built by factCheckInput: flags the
+ * canned "small squad" line, so tests can see a highlighted issue.
+ */
+export function fakeFactCheck(input: string): string {
+  const answer = section(input, 'ANSWER');
+  const issues = /led a small squad/.test(answer)
+    ? [
+        {
+          quote: "Lately I've led a small squad",
+          problem: "Your profile doesn't say you led a squad.",
+          fix: null,
+        },
+      ]
+    : [];
+  return JSON.stringify({ issues });
+}
+
 /** Splits a reply into stream pieces of a few words. */
 export function streamPieces(text: string, wordsPerPiece = 4): string[] {
   const words = text.split(/(?<=\s)/);

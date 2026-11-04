@@ -31,6 +31,8 @@ const fields = {
     turnAnalyzer: ModelIdSchema,
     answerFast: ModelIdSchema,
     answerQuality: ModelIdSchema,
+    liveBackup: ModelIdSchema,
+    factCheck: ModelIdSchema,
     preparation: ModelIdSchema,
   },
   answers: {
@@ -38,6 +40,8 @@ const fields = {
     length: AnswerLengthSchema,
     /** Detect the interviewer's questions and answer them without being asked. */
     autoAnswer: z.boolean(),
+    /** Check each generated answer against the profile and notes in the background. */
+    factCheck: z.boolean(),
   },
   privacy: {
     transcriptRetention: TranscriptRetentionSchema,
@@ -53,6 +57,8 @@ const fields = {
     /** Executable name (e.g. `Zoom.exe`) for `app`. */
     appName: z.string().trim().min(1).max(260).nullable(),
     transcribeMicrophone: z.boolean(),
+    /** Remove the interviewer's voice from the microphone when using speakers. */
+    echoCancellation: z.boolean(),
   },
   copilot: {
     opacity: z.number().min(0.4).max(1),
@@ -90,7 +96,7 @@ export const SETTINGS_SECTIONS = Object.keys(fields) as SettingsSection[];
 export const DEFAULT_SETTINGS: Settings = {
   appearance: { theme: 'system' },
   models: { ...DEFAULT_MODELS },
-  answers: { mode: 'fast', length: 'standard', autoAnswer: true },
+  answers: { mode: 'fast', length: 'standard', autoAnswer: true, factCheck: true },
   privacy: { transcriptRetention: '90d' },
   audio: {
     backend: 'auto',
@@ -99,6 +105,7 @@ export const DEFAULT_SETTINGS: Settings = {
     outputDeviceId: null,
     appName: null,
     transcribeMicrophone: true,
+    echoCancellation: true,
   },
   copilot: {
     opacity: 0.96,

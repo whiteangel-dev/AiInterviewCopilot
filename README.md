@@ -11,7 +11,8 @@ A desktop app (Windows first, macOS later) that listens to a live job interview 
 | 2 | Resume import, Application Knowledge, answer bank | Done ([summary](docs/phase2/summary.md)) |
 | 3 | Live listening: audio capture, live transcription, copilot window, sessions, hotkeys | Done ([summary](docs/phase3/summary.md)); real-device test pending |
 | 4 | Live answers: turn detection, streamed answers, answer bank first, Answer now / regenerate | Done ([summary](docs/phase4/summary.md)); **~1.2 s median** from last word to first answer word with real Gemini |
-| 5 | Speed and quality hardening: fact check, echo cancellation, provider failover | Next |
+| 5 | Hardening: duplicate and backup requests, fact check, echo cancellation, speech-only transcription, cost per session | Done ([summary](docs/phase5/summary.md)); about **$0.57 per interview hour** on your key (estimated) |
+| 6 | Windows commercial release: onboarding, updates, licensing, privacy | Next |
 
 ## Docs
 
@@ -25,7 +26,7 @@ A desktop app (Windows first, macOS later) that listens to a live job interview 
 |---|---|
 | `apps/desktop/` | The Electron app: `src/main` (windows, secrets, IPC), `src/engine` (utility process: database, AI), `src/preload`, `src/renderer` (React UI), `e2e/` (Playwright) |
 | `packages/ipc/` | Contracts between processes: IPC channels, settings schema, engine RPC, errors |
-| `packages/core/` | Engine logic without Electron: Gemini provider, turn taking, audio and transcription, resume text extraction and quote checking, answer matching, logging, redaction |
+| `packages/core/` | Engine logic without Electron: Gemini provider (duplicate and backup requests, usage metering, prices), turn taking, audio (voice detection, echo cancellation) and transcription, resume text extraction and quote checking, answer matching, logging, redaction |
 | `packages/db/` | Encrypted SQLite: schema, migrations, repositories |
 | `packages/prompts/` | Versioned prompts, model output schemas, Candidate Brief and knowledge compilers, recognizer vocabulary |
 | `packages/native-audio/` | Rust (napi-rs) WASAPI capture module: microphone, system audio, one app |

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ECHO_TICKS_PER_SECOND,
+  EchoCanceller,
   EchoDetector,
   SILENCE_DB,
   VoiceActivityDetector,
@@ -56,6 +57,8 @@ export interface LiveRunOptions {
   stt: SttProvider | null;
   sttOptions: (channel: AudioChannel) => SttStreamOptions;
   transcribeChannels: readonly AudioChannel[];
+  /** Remove the interviewer from the microphone (speakers instead of headphones). */
+  echoCancellation: boolean;
   /** Interview sessions save final segments; returns the stored segment ID. */
   saveSegment: ((segment: Omit<TranscriptSegment, 'id'>) => string) | null;
   checkpoint: ((durationMs: number, stats: SessionStats) => void) | null;
@@ -110,6 +113,7 @@ export class LiveRun {
   #lastCheckpoint = 0;
   #echoDropped = 0;
   #interimCount = 0;
+  #aec: EchoCanceller | null = null;
   readonly copilot: CopilotHooks | null;
   #sttStats = { audioSeconds: { interviewer: 0, candidate: 0 }, reconnects: 0 };
 
@@ -242,7 +246,7 @@ export class LiveRun {
       },
       reconnects: this.#sttStats.reconnects,
       echoDropped: this.#echoDropped,
-      ...(this.copilot ? { turns: { ...this.copilot.stats } } : {}),
+      ...(this.copilot ? { turns: { ...this.copilot.stats }, usage: this.copilot.usage } : {}),
     };
   }
 
@@ -270,6 +274,7 @@ export class LiveRun {
       segments: this.#segments.length,
       echoSuspected: this.#echo.suspected,
       echoCorrelation: Math.round(this.#echo.correlation * 100) / 100,
+      echoCancellation: this.#aec?.stats ?? null,
       stats: this.stats(),
       channels,
       sources: this.options.sources.details(),
@@ -281,6 +286,8 @@ export class LiveRun {
 
   #resume() {
     this.#resumedAt = this.#now();
+    // Both captures restart, so the echo canceller starts fresh too.
+    this.#aec = this.options.echoCancellation ? new EchoCanceller() : null;
     for (const c of Object.values(this.#channels)) {
       c.lastFrameAt = this.#now();
       c.lastSoundAt = this.#now();
@@ -343,10 +350,25 @@ export class LiveRun {
       c.status.capture = 'ok';
       this.#emitState();
     }
+    // The meter and the echo warning use the raw microphone.
     const db = levelDb(pcm);
     c.energy += 10 ** (db / 10);
     c.frames++;
     if (db > -60) c.lastSoundAt = now;
+    const aec = this.#aec;
+    if (!aec) {
+      this.#hear(c, pcm, db);
+    } else if (c.name === 'interviewer') {
+      aec.reference(pcm);
+      this.#hear(c, pcm, db);
+    } else {
+      // Voice detection and transcription hear the microphone without the interviewer.
+      for (const clean of aec.process(pcm)) this.#hear(c, clean, levelDb(clean));
+    }
+  }
+
+  /** Voice detection, the copilot and transcription. */
+  #hear(c: Channel, pcm: Int16Array, db: number) {
     if (c.vad.push(db)) {
       const t = this.activeMs();
       if (c.vad.speaking) c.speechStartMs = Math.max(0, t - 60);

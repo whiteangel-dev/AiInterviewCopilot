@@ -1,5 +1,5 @@
 import { AppError, type ModelInfo } from '@aic/ipc';
-import { fakeLiveAnswer, fakeTurnVerdict, streamPieces } from './fake-live';
+import { fakeFactCheck, fakeLiveAnswer, fakeTurnVerdict, streamPieces } from './fake-live';
 import { fakeStructuredReply } from './fake-responses';
 import type {
   AiProvider,
@@ -96,8 +96,12 @@ export class FakeProvider implements AiProvider {
       throw new AppError('invalid_api_key', 'Google rejected this API key.');
     const started = performance.now();
     const text =
-      req.task === 'turn-analyzer' ? fakeTurnVerdict(req.text) : fakeLiveAnswer(req.text);
-    const pieces = req.task === 'turn-analyzer' ? [text] : streamPieces(text);
+      req.task === 'turn-analyzer'
+        ? fakeTurnVerdict(req.text)
+        : req.task === 'fact-check'
+          ? fakeFactCheck(req.text)
+          : fakeLiveAnswer(req.text);
+    const pieces = req.task === 'live-answer' ? streamPieces(text) : [text];
     let firstTextMs: number | null = null;
     await wait(this.delayMs, req.signal);
     for (const [i, piece] of pieces.entries()) {

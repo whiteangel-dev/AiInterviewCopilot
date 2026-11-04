@@ -1,6 +1,7 @@
 export * from './answers';
 export * from './brief';
 export * from './context';
+export * from './fact-check';
 export * from './knowledge';
 export * from './live';
 export * from './resume';

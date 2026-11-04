@@ -64,6 +64,7 @@ function setup() {
     },
     checkpoint: null,
     copilot: null,
+    echoCancellation: false,
     events: {
       state: (s) => states.push(s),
       meter: () => undefined,

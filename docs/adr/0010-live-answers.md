@@ -1,6 +1,6 @@
 # ADR 0010 — Live answers: turn taking, answer writing, storage
 
-- **Status:** Accepted (2026-11-04). Built in Phase 4 and measured with real Gemini on recorded speech. Still to be tuned on real interviews.
+- **Status:** Accepted (2026-11-04). Hardened in Phase 5 ([ADR 0011](0011-hardening.md)): duplicate and backup requests, fact check. Built in Phase 4 and measured with real Gemini on recorded speech. Still to be tuned on real interviews.
 
 ## Context
 Phase 3 made the app listen: both sides transcribed live, shown in the copilot window. Phase 4 makes it answer: notice when the interviewer has asked something, and stream a short, grounded answer about a second after their last word.

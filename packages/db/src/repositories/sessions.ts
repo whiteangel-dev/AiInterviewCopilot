@@ -1,4 +1,4 @@
-import type { AudioChannel, SessionAudioInfo, SessionStats } from '@aic/ipc';
+import type { AnswerCheck, AudioChannel, SessionAudioInfo, SessionStats } from '@aic/ipc';
 import { and, asc, count, desc, eq, lt, max, ne } from 'drizzle-orm';
 import { uuidv7 } from 'uuidv7';
 import type { Db } from '../open';
@@ -91,6 +91,14 @@ export class SessionRepository {
       .insert(sessionAnswers)
       .values({ ...fields, createdAt: now, updatedAt: now })
       .onConflictDoUpdate({ target: sessionAnswers.id, set: { ...changes, updatedAt: now } })
+      .run();
+  }
+
+  saveAnswerCheck(id: string, check: AnswerCheck): void {
+    this.db
+      .update(sessionAnswers)
+      .set({ check, updatedAt: Date.now() })
+      .where(eq(sessionAnswers.id, id))
       .run();
   }
 

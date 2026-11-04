@@ -35,6 +35,20 @@ export function AnswersCard() {
           />
         </Field>
         <Field
+          label="Fact check"
+          description="Checks each answer against your profile and notes, and marks anything they don't support."
+        >
+          <Segmented
+            label="Fact check"
+            value={answers.factCheck ? 'on' : 'off'}
+            options={[
+              { value: 'on', label: 'On' },
+              { value: 'off', label: 'Off' },
+            ]}
+            onChange={(v) => void updateSettings({ answers: { factCheck: v === 'on' } })}
+          />
+        </Field>
+        <Field
           label="Mode"
           description={
             answers.mode === 'fast'

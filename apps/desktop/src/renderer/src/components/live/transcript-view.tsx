@@ -3,7 +3,7 @@ import { BookCheck, Sparkles } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { formatClock } from '../../live-store';
 import { cn } from '../../lib/utils';
-import { AnswerText } from './answer-card';
+import { AnswerIssues, AnswerText } from './answer-card';
 
 const WHO: Record<AudioChannel, string> = { interviewer: 'Interviewer', candidate: 'You' };
 
@@ -11,7 +11,7 @@ type Row =
   | { kind: 'segment'; s: TranscriptSegment; interim: boolean; at: number }
   | {
       kind: 'answer';
-      a: Pick<SessionAnswer, 'id' | 'text' | 'source' | 'status' | 'trigger'>;
+      a: Pick<SessionAnswer, 'id' | 'text' | 'source' | 'status' | 'trigger' | 'check'>;
       at: number;
     };
 
@@ -32,7 +32,7 @@ export function TranscriptView({
   interim?: Partial<Record<AudioChannel, TranscriptSegment>>;
   answers?: readonly Pick<
     SessionAnswer,
-    'id' | 'text' | 'source' | 'status' | 'askedAtMs' | 'trigger'
+    'id' | 'text' | 'source' | 'status' | 'askedAtMs' | 'trigger' | 'check'
   >[];
   compact?: boolean;
   emptyText?: string;
@@ -94,7 +94,16 @@ export function TranscriptView({
                       : 'Suggested answer'}
                 </div>
                 {row.a.text ? (
-                  <AnswerText text={row.a.text} className="text-[0.95em]" />
+                  <>
+                    <AnswerText
+                      text={row.a.text}
+                      issues={row.a.check?.issues}
+                      className="text-[0.95em]"
+                    />
+                    {row.a.check?.status === 'issues' && (
+                      <AnswerIssues issues={row.a.check.issues} />
+                    )}
+                  </>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     {row.a.status === 'error' ? "Couldn't write an answer." : 'Empty.'}

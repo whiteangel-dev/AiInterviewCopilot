@@ -9,6 +9,8 @@ export const MODEL_ROLES = [
   'turnAnalyzer',
   'answerFast',
   'answerQuality',
+  'liveBackup',
+  'factCheck',
   'preparation',
 ] as const;
 
@@ -19,6 +21,9 @@ export const DEFAULT_MODELS = {
   turnAnalyzer: 'gemini-3.5-flash-lite',
   answerFast: 'gemini-3.5-flash-lite',
   answerQuality: 'gemini-3.1-pro-preview',
+  // A different model, so a rate limit or outage on the primary doesn't hit it too.
+  liveBackup: 'gemini-3.1-flash-lite',
+  factCheck: 'gemini-3.5-flash-lite',
   preparation: 'gemini-3.1-pro-preview',
 } as const satisfies Record<ModelRole, string>;
 
@@ -28,5 +33,7 @@ export const MODEL_ROLE_KIND: Record<ModelRole, ModelKind> = {
   turnAnalyzer: 'text',
   answerFast: 'text',
   answerQuality: 'text',
+  liveBackup: 'text',
+  factCheck: 'text',
   preparation: 'text',
 };

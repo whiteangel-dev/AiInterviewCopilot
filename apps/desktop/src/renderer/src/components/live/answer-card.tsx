@@ -1,4 +1,4 @@
-import type { AnswerLength, LiveAnswer, TurnPhase } from '@aic/ipc';
+import type { AnswerIssue, AnswerLength, LiveAnswer, TurnPhase } from '@aic/ipc';
 import {
   BookCheck,
   ChevronLeft,
@@ -6,6 +6,7 @@ import {
   Minus,
   Plus,
   RotateCw,
+  ShieldCheck,
   Sparkles,
   TriangleAlert,
 } from 'lucide-react';
@@ -24,17 +25,49 @@ const LONGER: Record<AnswerLength, AnswerLength | null> = {
   detailed: null,
 };
 
+/** Marks the words the fact check flagged. */
+function marked(line: string, issues: readonly AnswerIssue[]): React.ReactNode {
+  const hits: { start: number; end: number; issue: AnswerIssue }[] = [];
+  for (const issue of issues) {
+    const start = line.indexOf(issue.quote);
+    if (start >= 0) hits.push({ start, end: start + issue.quote.length, issue });
+  }
+  if (hits.length === 0) return line;
+  hits.sort((a, b) => a.start - b.start);
+  const out: React.ReactNode[] = [];
+  let at = 0;
+  for (const h of hits) {
+    if (h.start < at) continue;
+    out.push(line.slice(at, h.start));
+    out.push(
+      <mark
+        key={h.start}
+        title={h.issue.problem}
+        className="rounded-sm bg-warning/20 text-inherit underline decoration-warning decoration-dotted underline-offset-2"
+      >
+        {line.slice(h.start, h.end)}
+      </mark>,
+    );
+    at = h.end;
+  }
+  out.push(line.slice(at));
+  return out;
+}
+
 /**
  * An answer in the copilot's format: the first line is a sentence to start
- * with, then bullets ("- ") in the order to say them.
+ * with, then bullets ("- ") in the order to say them. Words the fact check
+ * flagged are marked.
  */
 export function AnswerText({
   text,
   streaming = false,
+  issues = [],
   className,
 }: {
   text: string;
   streaming?: boolean;
+  issues?: readonly AnswerIssue[];
   className?: string;
 }) {
   const lines = text
@@ -52,7 +85,7 @@ export function AnswerText({
     <div className={cn('space-y-1.5 leading-snug', className)} data-testid="answer-text">
       {first && (
         <p className="text-[1.07em] font-medium">
-          {first.replace(/^- /, '')}
+          {marked(first.replace(/^- /, ''), issues)}
           {rest.length === 0 && caret}
         </p>
       )}
@@ -66,7 +99,7 @@ export function AnswerText({
                   <span className="mt-[0.55em] size-1.5 shrink-0 rounded-full bg-primary/70" />
                 )}
                 <span>
-                  {bullet ? line.slice(2) : line}
+                  {marked(bullet ? line.slice(2) : line, issues)}
                   {i === rest.length - 1 && caret}
                 </span>
               </li>
@@ -75,6 +108,30 @@ export function AnswerText({
         </ul>
       )}
       {!first && caret}
+    </div>
+  );
+}
+
+/** What the fact check found that the profile and notes don't support. */
+export function AnswerIssues({ issues }: { issues: readonly AnswerIssue[] }) {
+  if (issues.length === 0) return null;
+  return (
+    <div
+      className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-2 text-xs"
+      data-testid="answer-issues"
+      role="note"
+    >
+      <div className="mb-1 flex items-center gap-1.5 font-semibold text-warning">
+        <TriangleAlert className="size-3.5" aria-hidden /> Not in your profile or notes
+      </div>
+      <ul className="space-y-1">
+        {issues.map((issue) => (
+          <li key={issue.quote}>
+            <span className="font-medium">“{issue.quote}”</span>: {issue.problem}
+            {issue.fix && <span className="text-muted-foreground"> Your notes: {issue.fix}</span>}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -214,8 +271,13 @@ export function AnswerCard({
               </Badge>
             )}
             {answer.text && (
-              <AnswerText text={answer.text} streaming={answer.status === 'streaming'} />
+              <AnswerText
+                text={answer.text}
+                streaming={answer.status === 'streaming'}
+                issues={answer.check?.issues}
+              />
             )}
+            {answer.check?.status === 'issues' && <AnswerIssues issues={answer.check.issues} />}
             {answer.status === 'error' && (
               <p
                 className="mt-1 flex items-start gap-1.5 text-[13px] text-destructive"
@@ -248,6 +310,32 @@ export function AnswerCard({
                     ? 'On request'
                     : ''}
             </span>
+            {answer.check && answer.check.status !== 'error' && (
+              <span
+                className={cn(
+                  'flex items-center gap-1 px-1 text-[11px]',
+                  answer.check.status === 'ok' && 'text-success',
+                  answer.check.status === 'issues' && 'font-medium text-warning',
+                  answer.check.status === 'checking' && 'text-muted-foreground',
+                )}
+                data-testid="answer-check"
+                data-check={answer.check.status}
+                title="Checked against your profile and notes"
+              >
+                {answer.check.status === 'checking' ? (
+                  'Checking…'
+                ) : answer.check.status === 'ok' ? (
+                  <>
+                    <ShieldCheck className="size-3" aria-hidden /> Checked
+                  </>
+                ) : (
+                  <>
+                    <TriangleAlert className="size-3" aria-hidden />
+                    {answer.check.issues.length} to check
+                  </>
+                )}
+              </span>
+            )}
             <div className="ml-auto flex items-center">
               <Action
                 label="Shorter"

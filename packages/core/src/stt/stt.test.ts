@@ -97,6 +97,56 @@ describe('GeminiLiveStt', () => {
     expect(conn.closed).toBe(true);
   });
 
+  it('sends only speech, with padding, and ends the audio after each utterance', async () => {
+    const { conns, connector } = fakeConnector();
+    const { handlers } = recorder();
+    const stream = provider(connector).open(OPTIONS, handlers);
+    await vi.advanceTimersByTimeAsync(20);
+    const conn = conns[0]!;
+    // Two seconds of silence: nothing sent.
+    for (let i = 0; i < 100; i++) stream.write(pcm, false);
+    expect(conn.sent).toBe(0);
+    // Speech: 400 ms from before it (20 frames), then the speech itself.
+    for (let i = 0; i < 50; i++) stream.write(pcm, true);
+    expect(conn.sent).toBe(20 + 50);
+    // 800 ms after it (40 frames), then the stream is ended and sending stops.
+    for (let i = 0; i < 39; i++) stream.write(pcm, false);
+    expect(conn.ended).toBe(false);
+    stream.write(pcm, false);
+    expect(conn.ended).toBe(true);
+    for (let i = 0; i < 100; i++) stream.write(pcm, false);
+    expect(conn.sent).toBe(110);
+    // Billed audio: 2.2 s instead of 4.9 s.
+    expect(stream.stats.audioSeconds).toBeCloseTo(2.2);
+    stream.close();
+  });
+
+  it('keeps an idle connection open with a little silence', async () => {
+    const { conns, connector } = fakeConnector();
+    const { handlers } = recorder();
+    const stream = provider(connector).open(OPTIONS, handlers);
+    await vi.advanceTimersByTimeAsync(20);
+    const conn = conns[0]!;
+    for (let s = 0; s < 40; s++) {
+      vi.advanceTimersByTime(1000);
+      stream.write(pcm, false);
+    }
+    // About every 15 s, 100 ms of silence.
+    expect(conn.sent).toBe(2);
+    expect(stream.stats.audioSeconds).toBeCloseTo(0.2);
+    stream.close();
+  });
+
+  it('can send everything when the gate is off', async () => {
+    const { conns, connector } = fakeConnector();
+    const { handlers } = recorder();
+    const stream = provider(connector, { gate: null }).open(OPTIONS, handlers);
+    await vi.advanceTimersByTimeAsync(20);
+    for (let i = 0; i < 30; i++) stream.write(pcm, false);
+    expect(conns[0]!.sent).toBe(30);
+    stream.close();
+  });
+
   it('reconnects after a drop, keeps the partial utterance and resends buffered audio', async () => {
     const { conns, connector } = fakeConnector();
     const { events, handlers } = recorder();

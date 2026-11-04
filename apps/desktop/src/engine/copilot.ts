@@ -1,6 +1,11 @@
 import {
+  HedgeTimer,
   TurnTaker,
+  UsageMeter,
+  meteredProvider,
+  streamHedged,
   type AiProvider,
+  type HedgedResponse,
   type BankAnswer,
   type Logger,
   type TurnAnswer,
@@ -10,9 +15,21 @@ import {
   type WriteResult,
 } from '@aic/core';
 import type { NewSessionAnswer, NewSessionQuestion } from '@aic/db';
-import type { AnswerLength, LiveAnswer, LiveTurnUpdate, Settings, TurnStats } from '@aic/ipc';
+import type {
+  AnswerCheck,
+  AnswerLength,
+  LiveAnswer,
+  LiveTurnUpdate,
+  SessionUsage,
+  Settings,
+  TurnStats,
+} from '@aic/ipc';
 import {
+  FACT_CHECK_SCHEMA,
+  FACT_CHECK_SYSTEM,
   LIVE_ANSWER_PROMPT_VERSION,
+  factCheckInput,
+  parseFactCheck,
   TURN_ANALYZER_SYSTEM,
   TURN_VERDICT_SCHEMA,
   cleanAnswerText,
@@ -41,6 +58,7 @@ export interface CopilotHooks {
   resume(): void;
   stop(): void;
   readonly stats: TurnStats;
+  readonly usage: SessionUsage;
 }
 
 export interface CopilotOptions {
@@ -56,6 +74,7 @@ export interface CopilotOptions {
   save: {
     question(row: Omit<NewSessionQuestion, 'createdAt'>): void;
     answer(row: Omit<NewSessionAnswer, 'createdAt' | 'updatedAt'>): void;
+    check(answerId: string, check: AnswerCheck): void;
   } | null;
   emit: {
     answer(answer: LiveAnswer): void;
@@ -78,8 +97,20 @@ export class LiveCopilot implements CopilotHooks {
   #historyCut = 0;
   /** Question labels already saved, so repeated updates don't rewrite them. */
   readonly #savedQuestions = new Map<string, string>();
+  readonly #meter = new UsageMeter();
+  /** The provider, with every request counted. */
+  readonly #provider: AiProvider;
+  /** When to send a duplicate request, learned from this session's response times. */
+  readonly #analyzerHedge = new HedgeTimer();
+  readonly #answerHedge = new HedgeTimer();
+  #hedges = 0;
+  #failovers = 0;
+  /** The latest version of each answer, and its fact check. */
+  readonly #latest = new Map<string, TurnAnswer>();
+  readonly #checks = new Map<string, AnswerCheck>();
 
   constructor(private readonly o: CopilotOptions) {
+    this.#provider = meteredProvider(o.provider, this.#meter);
     const { answers, models } = o.settings;
     const quality = answers.mode === 'quality';
     const answerModel = quality ? models.answerQuality : models.answerFast;
@@ -107,6 +138,25 @@ export class LiveCopilot implements CopilotHooks {
     return { ...this.turns.stats };
   }
 
+  get usage(): SessionUsage {
+    return {
+      transcriptionModel: this.o.settings.models.transcription,
+      models: this.#meter.snapshot(),
+      hedges: this.#hedges,
+      failovers: this.#failovers,
+    };
+  }
+
+  /** Counts a hedged request's outcome, and learns from requests that weren't hedged. */
+  #track(res: HedgedResponse, timer: HedgeTimer | null, what: string) {
+    if (res.hedged) this.#hedges++;
+    if (res.failedOver) {
+      this.#failovers++;
+      this.o.log.warn('live request answered by the backup model', { what, model: res.model });
+    }
+    if (!res.hedged && !res.failedOver) timer?.add(res.firstTextMs);
+  }
+
   speech(who: 'interviewer' | 'candidate', speaking: boolean): void {
     this.turns.speech(who, speaking);
   }
@@ -130,7 +180,62 @@ export class LiveCopilot implements CopilotHooks {
   }
 
   answers(): LiveAnswer[] {
-    return this.turns.answers().map((a) => ({ ...a, runId: this.o.runId }));
+    return this.turns.answers().map((a) => this.#live(a));
+  }
+
+  #live(answer: TurnAnswer): LiveAnswer {
+    const check = this.#checks.get(answer.id);
+    return { ...answer, runId: this.o.runId, check: check ? structuredClone(check) : null };
+  }
+
+  // ── Fact check ────────────────────────────────────────────────────────────
+
+  /**
+   * Checks a finished generated answer against the profile and notes, off the
+   * critical path. Unsupported statements are highlighted in the copilot.
+   */
+  async #factCheck(answer: TurnAnswer) {
+    const model = this.o.settings.models.factCheck;
+    this.#checks.set(answer.id, { status: 'checking', issues: [], model });
+    this.o.emit.answer(this.#live(this.#latest.get(answer.id) ?? answer));
+    let check: AnswerCheck;
+    try {
+      const res = await streamHedged(
+        this.#provider,
+        {
+          apiKey: this.o.apiKey,
+          model,
+          system: FACT_CHECK_SYSTEM,
+          text: factCheckInput({
+            context: this.o.context,
+            question: answer.question,
+            answer: answer.text,
+          }),
+          schema: FACT_CHECK_SCHEMA,
+          thinking: 'minimal',
+          maxOutputTokens: 2048,
+          task: 'fact-check',
+        },
+        { hedgeAfterMs: null, fallbackModels: [this.o.settings.models.liveBackup] },
+      );
+      this.#track(res, null, 'fact check');
+      const issues = parseFactCheck(res.text, answer.text);
+      check = issues
+        ? { status: issues.length ? 'issues' : 'ok', issues, model: res.model }
+        : { status: 'error', issues: [], model: res.model };
+      if (issues?.length)
+        this.o.log.info('fact check flagged an answer', { issues: issues.length });
+    } catch (err) {
+      this.o.log.warn('fact check failed', { err: this.o.provider.toAppError(err).message });
+      check = { status: 'error', issues: [], model };
+    }
+    this.#checks.set(answer.id, check);
+    this.o.emit.answer(this.#live(this.#latest.get(answer.id) ?? answer));
+    try {
+      this.o.save?.check(answer.id, check);
+    } catch (err) {
+      this.o.log.error('saving a fact check failed', { err });
+    }
   }
 
   // ── Model calls ───────────────────────────────────────────────────────────
@@ -144,22 +249,28 @@ export class LiveCopilot implements CopilotHooks {
       -ANALYZER_RECENT_CHARS,
     );
     let json = '';
-    const res = await this.o.provider.streamText({
-      apiKey: this.o.apiKey,
-      model: this.o.settings.models.turnAnalyzer,
-      system: TURN_ANALYZER_SYSTEM,
-      text: turnAnalyzerInput({ recent, turn: input.turn, longSilence: input.longSilence }),
-      schema: TURN_VERDICT_SCHEMA,
-      thinking: 'minimal',
-      maxOutputTokens: 300,
-      task: 'turn-analyzer',
-      signal,
-      onText: (piece) => {
-        json += piece;
-        const action = readTurnAction(json);
-        if (action) onAction(action);
+    const { models } = this.o.settings;
+    const res = await streamHedged(
+      this.#provider,
+      {
+        apiKey: this.o.apiKey,
+        model: models.turnAnalyzer,
+        system: TURN_ANALYZER_SYSTEM,
+        text: turnAnalyzerInput({ recent, turn: input.turn, longSilence: input.longSilence }),
+        schema: TURN_VERDICT_SCHEMA,
+        thinking: 'minimal',
+        maxOutputTokens: 300,
+        task: 'turn-analyzer',
+        signal,
+        onText: (piece) => {
+          json += piece;
+          const action = readTurnAction(json);
+          if (action) onAction(action);
+        },
       },
-    });
+      { hedgeAfterMs: this.#analyzerHedge.delayMs, fallbackModels: [models.liveBackup] },
+    );
+    this.#track(res, this.#analyzerHedge, 'turn analyzer');
     return parseTurnVerdict(res.text);
   }
 
@@ -173,21 +284,29 @@ export class LiveCopilot implements CopilotHooks {
     const { answers, models } = this.o.settings;
     const quality = answers.mode === 'quality';
     let full = '';
-    const res = await this.o.provider.streamText({
-      apiKey: this.o.apiKey,
-      model: quality ? models.answerQuality : models.answerFast,
-      system: this.#system(length),
-      text: liveAnswerInput({ history: formatHistory(this.#historyFor(history)), turn }),
-      thinking: quality ? 'low' : 'minimal',
-      maxOutputTokens: quality ? 4096 : 1024,
-      task: 'live-answer',
-      signal,
-      onText: (piece) => {
-        full += piece;
-        const text = cleanAnswerText(full).trimStart();
-        if (text) onText(text);
+    const res = await streamHedged(
+      this.#provider,
+      {
+        apiKey: this.o.apiKey,
+        model: quality ? models.answerQuality : models.answerFast,
+        system: this.#system(length),
+        text: liveAnswerInput({ history: formatHistory(this.#historyFor(history)), turn }),
+        thinking: quality ? 'low' : 'minimal',
+        maxOutputTokens: quality ? 4096 : 1024,
+        task: 'live-answer',
+        signal,
+        onText: (piece) => {
+          full += piece;
+          const text = cleanAnswerText(full).trimStart();
+          if (text) onText(text);
+        },
       },
-    });
+      // Quality answers take ~5 s anyway: no duplicates, but fall back to Fast on failure.
+      quality
+        ? { hedgeAfterMs: null, fallbackModels: [models.answerFast, models.liveBackup] }
+        : { hedgeAfterMs: this.#answerHedge.delayMs, fallbackModels: [models.liveBackup] },
+    );
+    this.#track(res, quality ? null : this.#answerHedge, 'answer');
     if (!cleanAnswerText(res.text).trim()) throw new Error('The model returned an empty answer.');
     return {
       model: res.model,
@@ -237,7 +356,17 @@ export class LiveCopilot implements CopilotHooks {
   // ── Answers out ───────────────────────────────────────────────────────────
 
   #onAnswer(answer: TurnAnswer, final: boolean, shown: boolean, usage: WriteResult | null) {
-    this.o.emit.answer({ ...answer, runId: this.o.runId });
+    this.#latest.set(answer.id, answer);
+    this.o.emit.answer(this.#live(answer));
+    if (
+      final &&
+      answer.status === 'done' &&
+      answer.source === 'generated' &&
+      this.o.settings.answers.factCheck &&
+      !this.#checks.has(answer.id)
+    ) {
+      void this.#factCheck(answer);
+    }
     const save = this.o.save;
     if (!save) return;
     try {

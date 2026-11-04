@@ -212,6 +212,20 @@ function CaptureCard({
             onChange={(v) => void updateSettings({ audio: { transcribeMicrophone: v === 'on' } })}
           />
         </Field>
+        <Field
+          label="Echo cancellation"
+          description="Removes the interviewer's voice from your microphone when you use speakers. Headphones still work best."
+        >
+          <Segmented
+            label="Echo cancellation"
+            value={audio.echoCancellation ? 'on' : 'off'}
+            options={[
+              { value: 'on', label: 'On' },
+              { value: 'off', label: 'Off' },
+            ]}
+            onChange={(v) => void updateSettings({ audio: { echoCancellation: v === 'on' } })}
+          />
+        </Field>
       </CardBody>
     </Card>
   );

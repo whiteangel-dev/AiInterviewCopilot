@@ -27,6 +27,15 @@ const ROLE_TEXT: Record<ModelRole, { label: string; description: string }> = {
     label: 'Answers: Quality',
     description: 'Used in Quality mode. Stronger, but about 5 seconds to the first words.',
   },
+  liveBackup: {
+    label: 'Backup for live answers',
+    description:
+      'Used when the answer model is rate-limited or fails during an interview. Best as a different model.',
+  },
+  factCheck: {
+    label: 'Fact check',
+    description: 'Checks each live answer against your profile and notes, in the background.',
+  },
   preparation: {
     label: 'Preparation',
     description:

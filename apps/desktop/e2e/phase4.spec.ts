@@ -99,7 +99,10 @@ test('live answers: with automatic answers off, "Answer now" answers on request'
     await addKey(page);
     await nav(page, 'Settings');
     const answers = page.locator('#answers');
-    await answers.getByRole('radio', { name: 'Off' }).click();
+    await answers
+      .locator('[aria-label="Answer automatically"]')
+      .getByRole('radio', { name: 'Off' })
+      .click();
     await expect(answers).toContainText('Answers appear only when you press Answer now');
     await expect(page.locator('#hotkeys')).toContainText('Ctrl + Alt + Enter');
 

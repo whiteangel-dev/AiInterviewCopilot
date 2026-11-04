@@ -17,12 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { encodeWav, readWav } from '@aic/core';
 import { KnowledgeRepository, ProfileRepository, SessionRepository, openDatabase } from '@aic/db';
-import {
-  EMPTY_PROFILE,
-  type EngineEvents,
-  type KnowledgeItemFields,
-  type LiveAnswer,
-} from '@aic/ipc';
+import { EMPTY_PROFILE, type EngineEvents, type LiveAnswer } from '@aic/ipc';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createEngine } from '../apps/desktop/src/engine/engine';
 import {
@@ -30,7 +25,7 @@ import {
   AUDIO,
   hasAudio,
   loadClips,
-  loadKnowledgeNotes,
+  knowledgeItems,
   loadProfileBrief,
   ms,
   percentile,
@@ -63,29 +58,6 @@ function buildTrack(dir: string, clips: Clip[]) {
   const file = join(dir, 'interviewer.wav');
   writeFileSync(file, encodeWav(all));
   return { file, ends, durationMs: at };
-}
-
-/** knowledge.md → notes: "Answer instructions" are instructions, the rest facts. */
-function knowledgeItems(): KnowledgeItemFields[] {
-  const items: KnowledgeItemFields[] = [];
-  let section = '';
-  for (const line of loadKnowledgeNotes().split('\n')) {
-    if (line.startsWith('## ')) section = line.slice(3).trim();
-    else if (line.startsWith('- ')) {
-      items.push({
-        kind: section === 'Answer instructions' ? 'instruction' : 'fact',
-        category:
-          section === 'Answer instructions'
-            ? 'style'
-            : section === 'Target company'
-              ? 'company'
-              : 'experience',
-        title: '',
-        content: line.slice(2).trim(),
-      });
-    }
-  }
-  return items;
 }
 
 describe.skipIf(!API_KEY || !hasAudio())('live answers (real Gemini, whole engine)', () => {
@@ -239,6 +211,13 @@ describe.skipIf(!API_KEY || !hasAudio())('live answers (real Gemini, whole engin
         50,
       )}`,
       `correct outcome ${correct}/${rows.length} · withdrawn ${withdrawn} · turns ${JSON.stringify(final?.mode ? detail.stats?.turns : null)}`,
+      `fact check: ${detail.answers.filter((a) => a.check?.status === 'ok').length} ok, ${detail.answers.filter((a) => a.check?.status === 'issues').length} flagged, ${detail.answers.filter((a) => a.check?.status === 'error').length} failed`,
+      ...detail.answers
+        .filter((a) => a.check?.status === 'issues')
+        .flatMap((a) => a.check!.issues.map((i) => `  flagged: "${i.quote}" (${i.problem})`)),
+      `requests: ${JSON.stringify(detail.stats?.usage?.models)} · hedges ${detail.stats?.usage?.hedges} · failovers ${detail.stats?.usage?.failovers}`,
+      `audio sent for transcription: interviewer ${detail.stats?.audioSeconds.interviewer} s of ${Math.round(detail.durationMs / 1000)} s listened`,
+      `estimated cost: ${JSON.stringify(detail.cost)}`,
       `saved ${saveResult('live-answers', { settings: settings.models, rows, stats: detail.stats, withdrawn })}`,
     ]);
 

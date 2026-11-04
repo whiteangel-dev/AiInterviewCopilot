@@ -1,4 +1,4 @@
-import type { SessionDetail, SessionSummary } from '@aic/ipc';
+import type { SessionCost, SessionDetail, SessionSummary } from '@aic/ipc';
 import {
   ArrowLeft,
   ClipboardCopy,
@@ -108,6 +108,25 @@ function SessionList() {
         ))}
       </ul>
     </Card>
+  );
+}
+
+const usd = (n: number) => (n < 0.01 ? '<$0.01' : '$' + n.toFixed(2));
+
+/** What the session cost on the user's Gemini key, estimated. */
+function CostNote({ cost, stats }: { cost: SessionCost; stats: SessionDetail['stats'] }) {
+  const requests = Object.values(stats?.usage?.models ?? {}).reduce((n, u) => n + u.requests, 0);
+  const minutes = stats
+    ? Math.round((stats.audioSeconds.interviewer + stats.audioSeconds.candidate) / 6) / 10
+    : 0;
+  return (
+    <p className="mt-4 text-xs text-muted-foreground" data-testid="session-cost">
+      Estimated cost on your Gemini key: <span className="font-medium">{usd(cost.totalUsd)}</span> (
+      {cost.transcriptionUsd !== null && 'transcription ' + usd(cost.transcriptionUsd) + ', '}
+      answers {usd(cost.modelsUsd)}; {minutes} min of speech transcribed, {requests} model
+      requests). Prices as of {cost.pricesChecked}
+      {cost.unpriced.length > 0 && '; no price known for ' + cost.unpriced.join(', ')}.
+    </p>
   );
 }
 
@@ -298,6 +317,7 @@ function SessionView({ id }: { id: string }) {
             className="max-h-[65vh] text-sm"
             emptyText="Nothing was transcribed in this session."
           />
+          {session.cost && <CostNote cost={session.cost} stats={session.stats} />}
           {session.stats && session.stats.echoDropped > 0 && (
             <p className="mt-4 text-xs text-muted-foreground">
               {session.stats.echoDropped} microphone line

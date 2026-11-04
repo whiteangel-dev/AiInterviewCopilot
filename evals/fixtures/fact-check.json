@@ -1,0 +1,200 @@
+[
+  {
+    "id": "c01",
+    "question": "Tell me about yourself.",
+    "answer": "I'm a backend engineer with about 10 years of experience, mostly on high-throughput, event-driven systems.\n- At Quayside Logistics I'm a senior engineer on the platform team and tech lead for a 5-person squad.\n- I led the move of our shipment-event pipeline from cron batches to Kafka on AWS MSK.\n- Before that I spent almost four years at Tallgrass Health building the appointment-scheduling API.",
+    "injected": null
+  },
+  {
+    "id": "c02",
+    "question": "Why did you pick Kafka over RabbitMQ?",
+    "answer": "We needed replay for reprocessing, which RabbitMQ didn't give us.\n- Partition keys gave us per-shipment ordering.\n- We kept 7 days of retention, and several downstream teams read the same stream with their own consumer groups.\n- We chose MSK so we didn't have to run brokers ourselves.",
+    "injected": null
+  },
+  {
+    "id": "c03",
+    "question": "Have you worked with Kubernetes in production?",
+    "answer": "I haven't run Kubernetes in production; I've only experimented with it locally using kind.\n- In production I run containers on AWS ECS with Fargate.\n- I expect to ramp up quickly.",
+    "injected": null
+  },
+  {
+    "id": "c04",
+    "question": "Tell me about a major production incident.",
+    "answer": "The big one was the Black Friday 2022 consumer-lag incident at Quayside.\n- A consumer deploy added a synchronous call to the address-validation service inside the hot loop.\n- When that service slowed down, lag grew to about 2 hours, so we rolled back and scaled consumers.\n- Afterward we added lag alerts at 2 minutes and made enrichment asynchronous behind a circuit breaker.",
+    "injected": null
+  },
+  {
+    "id": "c05",
+    "question": "What's your biggest weakness?",
+    "answer": "I used to over-own incidents and not delegate.\n- Since 2023 I rotate the incident-commander role.\n- I coach others through it instead of handling everything myself.",
+    "injected": null
+  },
+  {
+    "id": "c06",
+    "question": "Where do you see yourself in five years?",
+    "answer": "I'd like to be a staff-level engineer owning reliability for a core money-movement system.\n- Mentoring is a big part of that for me.",
+    "injected": null
+  },
+  {
+    "id": "c07",
+    "question": "Tell me about a disagreement with a teammate.",
+    "answer": "A staff engineer wanted the notifications service to read the shared database, and I argued for consuming events.\n- We ran a one-week spike of both and wrote a short decision doc with the numbers.\n- We went with events, and that engineer later sponsored my promotion case.",
+    "injected": null
+  },
+  {
+    "id": "c08",
+    "question": "How would you debug a memory leak in a Node.js service?",
+    "answer": "First I'd confirm it's really a leak by watching memory over time, then compare heap snapshots.\n- At Tallgrass I found a leak in the scheduling API that way: an unbounded in-memory cache.\n- I used heap snapshots and clinic.js, and fixed it with a size-bounded LRU cache with a TTL.\n- Then I added memory-growth alerts so it couldn't sneak up on us again.",
+    "injected": null
+  },
+  {
+    "id": "c09",
+    "question": "What's your experience with PostgreSQL?",
+    "answer": "I've used PostgreSQL at my last two jobs.\n- At Quayside I introduced idempotent consumers and a transactional outbox in PostgreSQL, and duplicate notifications dropped by 97%.\n- At Tallgrass the scheduling API ran on PostgreSQL, and query tuning and caching took p95 latency from 900 ms to 180 ms.",
+    "injected": null
+  },
+  {
+    "id": "c10",
+    "question": "How's your day going so far?",
+    "answer": "It's going well, thanks for having me.",
+    "injected": null
+  },
+  {
+    "id": "c11",
+    "question": "Do you have any questions for us?",
+    "answer": "Yes, a few.\n- How do you handle ledger reconciliation?\n- What does the on-call load look like?\n- How would you measure success in my first six months?",
+    "injected": null
+  },
+  {
+    "id": "c12",
+    "question": "What made you interested in this role at Kestrel Pay?",
+    "answer": "The platform work at Quayside is now mostly maintenance, and I want to work on payments infrastructure where correctness really matters.\n- Your ledger work is exactly that.\n- I'd bring my experience with event pipelines and reliability.",
+    "injected": null
+  },
+  {
+    "id": "c13",
+    "question": "How would you design a rate limiter for a public API at 50,000 requests per second?",
+    "answer": "I'd use a token bucket per API key, with the counters in Redis.\n- Each request does an atomic check-and-decrement with a Lua script.\n- I'd keep a small local cache in each instance to absorb bursts.\n- If Redis is unavailable, I'd fail open with a local limiter.",
+    "injected": null
+  },
+  {
+    "id": "e01",
+    "question": "Tell me about yourself.",
+    "answer": "I'm a backend engineer with about 10 years of experience.\n- At Quayside I lead a team of 12 engineers on the platform team.\n- I led the move of our shipment-event pipeline to Kafka on AWS MSK.",
+    "injected": "I lead a team of 12 engineers"
+  },
+  {
+    "id": "e02",
+    "question": "Why did you pick Kafka over RabbitMQ?",
+    "answer": "We needed replay for reprocessing, which RabbitMQ didn't give us.\n- Partition keys gave us per-shipment ordering.\n- We chose MSK because it cut our infrastructure cost by 40%.",
+    "injected": "cut our infrastructure cost by 40%"
+  },
+  {
+    "id": "e03",
+    "question": "Have you worked with Kubernetes in production?",
+    "answer": "Yes, I've run Kubernetes in production at Quayside for about two years.\n- We run our consumers there, alongside some ECS services.",
+    "injected": "I've run Kubernetes in production at Quayside"
+  },
+  {
+    "id": "e04",
+    "question": "Tell me about a major production incident.",
+    "answer": "The big one was the Black Friday 2022 consumer-lag incident at Quayside.\n- Lag grew to about 2 hours, so we rolled back and scaled consumers.\n- Afterward we migrated the consumers to Go, which fixed the bottleneck.",
+    "injected": "we migrated the consumers to Go"
+  },
+  {
+    "id": "e05",
+    "question": "What's your biggest weakness?",
+    "answer": "I used to over-own incidents and not delegate.\n- Since 2023 I rotate the incident-commander role.\n- I also took a management course at Stanford to work on it.",
+    "injected": "took a management course at Stanford"
+  },
+  {
+    "id": "e06",
+    "question": "Tell me about a disagreement with a teammate.",
+    "answer": "A staff engineer wanted the notifications service to read the shared database, and I argued for consuming events.\n- We ran a two-week spike of both and wrote a decision doc.\n- We went with events.",
+    "injected": "two-week spike"
+  },
+  {
+    "id": "e07",
+    "question": "How would you debug a memory leak in a Node.js service?",
+    "answer": "At Tallgrass I found a leak in the scheduling API caused by an unbounded in-memory cache.\n- I tracked it down with Datadog's continuous profiler.\n- I fixed it with a size-bounded LRU cache with a TTL.",
+    "injected": "I tracked it down with Datadog's continuous profiler"
+  },
+  {
+    "id": "e08",
+    "question": "What's your experience with PostgreSQL?",
+    "answer": "I've used PostgreSQL at my last two jobs.\n- At Tallgrass, query tuning and caching took p95 latency from 900 ms to 90 ms.",
+    "injected": "900 ms to 90 ms"
+  },
+  {
+    "id": "e09",
+    "question": "Tell me about a tool you built.",
+    "answer": "At Tallgrass I built Replay, a tool that replays production Kafka topics into staging.\n- We used it for load tests before releases.",
+    "injected": "At Tallgrass I built Replay"
+  },
+  {
+    "id": "e10",
+    "question": "Tell me about your education.",
+    "answer": "I studied computer science at Stanford and graduated in 2015.\n- I also hold the AWS Solutions Architect Associate certification.",
+    "injected": "at Stanford"
+  },
+  {
+    "id": "e11",
+    "question": "What are you most proud of?",
+    "answer": "The shipment-event pipeline redesign at Quayside.\n- Tracking updates went from about 15 minutes to under 5 seconds.\n- I won the company's engineering excellence award for it.",
+    "injected": "I won the company's engineering excellence award"
+  },
+  {
+    "id": "e12",
+    "question": "Where do you see yourself in five years?",
+    "answer": "I'd like to move into engineering management and lead a larger organization.\n- Mentoring is a big part of that for me.",
+    "injected": "move into engineering management"
+  },
+  {
+    "id": "e13",
+    "question": "Tell me about your open-source work.",
+    "answer": "I maintain openslo-lint, a Go CLI that validates SLO definition files.\n- It has about 6,000 GitHub stars.",
+    "injected": "about 6,000 GitHub stars"
+  },
+  {
+    "id": "c14",
+    "question": "How long have you been at Quayside?",
+    "answer": "I've been at Quayside for over five years now, since March 2021.\n- Before that I was at Tallgrass Health from 2017 to 2021.",
+    "injected": null
+  },
+  {
+    "id": "c15",
+    "question": "Do you have any certifications?",
+    "answer": "Yes, I'm an AWS Certified Solutions Architect – Associate; I got it in 2022.",
+    "injected": null
+  },
+  {
+    "id": "s01",
+    "question": "How would you debug a memory leak in a Node.js service?",
+    "answer": "At Tallgrass I tracked down a memory leak in our scheduling API using heap snapshots and clinic.js.\n- The cause was an unbounded in-memory cache.\n- I replaced it with a size-bounded LRU cache with an expiration time.\n- To prevent regressions, I added memory-growth alerts and included heap snapshots in our local load tests.",
+    "injected": "included heap snapshots in our local load tests"
+  },
+  {
+    "id": "s02",
+    "question": "What made you interested in this role at Kestrel Pay?",
+    "answer": "I've been following Kestrel Pay and really like how you handle B2B payouts.\n- I want to work on payments infrastructure where correctness really matters.",
+    "injected": "I've been following Kestrel Pay"
+  },
+  {
+    "id": "s03",
+    "question": "What made you interested in this role at Kestrel Pay?",
+    "answer": "I'm looking for work where correctness in money movement matters.\n- At Quayside Logistics I've spent the last five years scaling event-driven pipelines and building reliable financial-grade outbox patterns.",
+    "injected": "financial-grade outbox patterns"
+  },
+  {
+    "id": "s04",
+    "question": "How do you make sure incidents get caught early?",
+    "answer": "I like alerts on the signals that move first.\n- At Tallgrass we set up consumer-lag alerts at 2 minutes after a big incident.\n- That way we hear about problems before customers do.",
+    "injected": "At Tallgrass we set up consumer-lag alerts"
+  },
+  {
+    "id": "s05",
+    "question": "Tell me about your leadership experience.",
+    "answer": "I'm tech lead for a 5-person squad at Quayside.\n- I've mentored 5 engineers to promotion.\n- I also ran the incident review program.",
+    "injected": "mentored 5 engineers to promotion"
+  }
+]

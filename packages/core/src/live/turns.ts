@@ -81,8 +81,8 @@ export interface BankAnswer {
   text: string;
 }
 
-/** An answer without the run ID (the owner adds it). */
-export type TurnAnswer = Omit<LiveAnswer, 'runId'>;
+/** An answer without the run ID and fact check (the owner adds them). */
+export type TurnAnswer = Omit<LiveAnswer, 'runId' | 'check'>;
 
 export interface AnswerUpdate {
   /** Set once the answer has its final status. */

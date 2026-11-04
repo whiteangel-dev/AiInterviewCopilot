@@ -1,6 +1,6 @@
 # AI Interview Copilot — Architecture
 
-**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)); live listening built in Phase 3 ([summary](phase3/summary.md)); live answers built in Phase 4 ([summary](phase4/summary.md)). Real-device capture and real interviews are still to be confirmed on a Windows PC. Individual decisions are recorded in [docs/adr/](adr/).
+**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)); live listening built in Phase 3 ([summary](phase3/summary.md)); live answers built in Phase 4 ([summary](phase4/summary.md)); hardening built in Phase 5 ([summary](phase5/summary.md)). Real-device capture, real interviews and real speakers are still to be confirmed on a Windows PC. Individual decisions are recorded in [docs/adr/](adr/).
 
 A Windows-first (macOS later) desktop app. It listens to a live job interview, detects the interviewer's questions, and streams short, natural answers grounded in the candidate's resume and their own notes ("Application Knowledge"). English-only.
 
@@ -8,7 +8,8 @@ A Windows-first (macOS later) desktop app. It listens to a live job interview, d
 
 1. **Speed.** First answer words on screen within 1.5 s (median) of the interviewer's last word. Measured:
    - Phase 0 prototype: 0.97 s median, 1.24 s at the 95th percentile;
-   - the app (Phase 4, three runs): 1.15–1.36 s median, 1.44–1.87 s at the 95th percentile. The model's time to first token varied that day; the app's own part is ~0.5 s.
+   - the app (Phase 4, three runs): 1.15–1.36 s median, 1.44–1.87 s at the 95th percentile. The model's time to first token varied that day; the app's own part is ~0.5 s;
+   - with duplicate requests for slow responses (Phase 5): 1.23 s median, 1.46 s at the 95th percentile.
 2. **Reliability during a live interview.** No crashes, automatic reconnection, graceful fallback.
 3. **Grounded answers.** Never invent experience; handle gaps honestly.
 4. **Low resource use.** Runs next to Zoom or Teams and a browser.
@@ -75,12 +76,16 @@ You (microphone) ───────────┘   16 kHz mono  └► loca
 5. **Memory.** The interview history is append-only and includes what the candidate actually said (mic transcript), so follow-ups stay consistent with it. An answered question with no transcribed reply gets a placeholder reply, so it isn't answered again.
 6. **Manual override.** "Answer now" (hotkey), regenerate (hotkey), shorter / longer, and an "Answer automatically" setting.
 7. **Answer bank first.** An approved prepared answer that confidently matches is shown as it is, with no model call.
+8. **Slow or failing requests** (Phase 5):
+   - a live request with no text after about the session's 90th-percentile wait gets a duplicate, and the first to answer wins;
+   - one that fails before any text goes to the backup model.
+9. **Fact check** (Phase 5): after each generated answer, statements the profile and notes don't support are marked in the copilot, off the critical path.
 
 Built in Phase 4 as a tested state machine (`packages/core/src/live/turns.ts`). Turn boundaries:
 - a turn ends when it was answered, when the candidate spoke, or after a finished statement and a pause;
 - otherwise more speech extends it.
 
-Details: [ADR 0010](adr/0010-live-answers.md).
+Details: [ADR 0010](adr/0010-live-answers.md), [ADR 0011](adr/0011-hardening.md).
 
 ### Prompt layout (ordered for provider-side caching)
 
@@ -97,7 +102,8 @@ Use only Gemini's automatic (implicit) caching: explicit caches *increased* late
 | Live answer: Speed / Balanced | `gemini-3.5-flash-lite` | Thinking `MINIMAL` |
 | Live answer: Quality | `gemini-3.1-pro-preview` | About 5 s to first token; for users who accept the wait |
 | Resume extraction, knowledge analysis, answer bank | Strongest available Pro model | Not latency-sensitive |
-| Background fact check, summaries | `gemini-3.5-flash-lite` | Off the critical path |
+| Backup for live answers | `gemini-3.1-flash-lite` | On purpose a different model: used when the primary fails or is rate-limited |
+| Background fact check | `gemini-3.5-flash-lite` | Off the critical path; 17/18 planted claims caught, 0 false alarms, ~0.85 s |
 
 ## 5. Audio capture
 
@@ -113,9 +119,10 @@ Built in Phase 3 ([ADR 0009](adr/0009-live-listening.md)).
 - **macOS (later):** Core Audio process taps on 14.2+, ScreenCaptureKit audio on 13.x, through a Swift module bridged into the same Rust module.
 - **Echo:**
   - recommend headphones;
-  - detect echo by comparing channel levels (built);
-  - remove mic transcript lines that duplicate interviewer text (built);
-  - cancel echo later using system audio as the reference.
+  - detect echo by comparing channel levels;
+  - cancel echo with an adaptive filter, using system audio as the reference, plus a residual suppressor (Phase 5, [ADR 0011](adr/0011-hardening.md));
+  - remove mic transcript lines that duplicate interviewer text (a backstop).
+- **Transcription cost:** only speech (with 400 ms before and 800 ms after) is sent; an idle connection gets 100 ms of silence every 15 s so the service keeps it open. This roughly halves the cost of an interview hour (about $1.15 → $0.57, estimated).
 
 ## 6. Preparation pipeline (not latency-sensitive)
 
@@ -145,7 +152,7 @@ Built in Phase 2; details in [ADR 0008](adr/0008-preparation-pipeline.md).
 | Knowledge | `knowledge_bases`, `knowledge_items` (fact/instruction), `knowledge_compilations` (snapshot) |
 | Search | `context_chunks` + FTS5 + sqlite-vec, if retrieval is needed (not yet: the whole brief and knowledge fit in the prompt) |
 | Answer bank | `prepared_answers` |
-| Sessions | `sessions` (pins the profile version; snapshot of the answer context and vocabulary; turn counters), `transcript_segments` (final only), `session_questions`, `session_answers` (text, status, latency, time to first token, tokens, model, prompt version) |
+| Sessions | `sessions` (pins the profile version; snapshot of the answer context and vocabulary; turn counters; model usage), `transcript_segments` (final only), `session_questions`, `session_answers` (text, status, latency, time to first token, tokens, model, prompt version, fact check) |
 | Settings | `provider_configs` (key *reference* and last 4 characters only; cached model list), `app_settings` (one row per section) |
 
 IDs are UUIDv7. Deleting a profile or knowledge base removes everything under it, and `secure_delete` overwrites the freed pages. Sessions keep a snapshot of the context they used, so they survive changes to (or deletion of) the profile. "Delete my data" removes everything. The schema version is `PRAGMA user_version`. An existing database is backed up (still encrypted) before migrating, and a database from a newer app version is refused.
@@ -173,7 +180,7 @@ packages/core/       engine logic without Electron: AI providers, model roles, l
 packages/db/         schema, generated migrations (drizzle/), repositories
 packages/prompts/    versioned prompts, model output schemas, brief and knowledge compilers, vocabulary
 packages/native-audio/  Rust (napi-rs) WASAPI capture module; built into apps/desktop/resources/native/
-evals/               opt-in evaluations with real Gemini: turn analyzer, the whole live pipeline, model roles
+evals/               opt-in evaluations with real Gemini: turn analyzer, the whole live pipeline, fact check, echo, model roles
 docs/                architecture, ADRs, phase reports, release process
 spikes/              Phase 0 benchmarks and fixtures (kept as reference)
 ```
@@ -187,7 +194,7 @@ spikes/              Phase 0 benchmarks and fixtures (kept as reference)
 | 2 | Resume import and extraction, Application Knowledge, answer bank | **Done** ([summary](phase2/summary.md)) |
 | 3 | Audio capture on real devices, live transcription, copilot window, hotkeys | **Done** ([summary](phase3/summary.md)); real-device capture to confirm on a Windows PC |
 | 4 | Turn detection + answer generation (**Windows MVP**) | **Done** ([summary](phase4/summary.md)); real-interview tuning on a Windows PC |
-| 5 | Speed and quality hardening: fact check, echo cancellation, provider failover, cost per interview hour | Next |
-| 6 | Windows commercial release: onboarding, updates, licensing, privacy | |
+| 5 | Speed and quality hardening: fact check, echo cancellation, provider failover, cost per interview hour | **Done** ([summary](phase5/summary.md)); real-speaker test on a Windows PC; a second provider when a key is available |
+| 6 | Windows commercial release: onboarding, updates, licensing, privacy | Next |
 | 7 | macOS | |
 | 8 | Practice mode, offline mode, analytics | |

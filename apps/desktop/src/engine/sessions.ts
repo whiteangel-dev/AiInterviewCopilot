@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { release } from 'node:os';
-import { FakeSttProvider, GeminiLiveStt, matchHeard, type SttProvider } from '@aic/core';
+import {
+  FakeSttProvider,
+  GeminiLiveStt,
+  estimateSessionCost,
+  matchHeard,
+  type SttProvider,
+} from '@aic/core';
 import type { SessionAnswerWithQuestion, SessionListRow, SessionRow } from '@aic/db';
 import {
   AUDIO_CHANNELS,
@@ -97,6 +103,7 @@ const toSessionAnswer = (row: SessionAnswerWithQuestion): SessionAnswer => ({
   latencyMs: row.latencyMs,
   askedAtMs: row.question.askedAtMs,
   createdAt: row.createdAt,
+  check: row.check ?? null,
 });
 
 export function formatClock(ms: number): string {
@@ -240,12 +247,22 @@ export function sessionModule(ctx: EngineContext): SessionModule {
       endMs: s.endMs,
     }));
     const answers = r.answers(id).map(toSessionAnswer);
+    const usage = row.stats?.usage;
     return {
       ...toSummary({ ...row, segmentCount: segments.length, answerCount: answers.length }),
       audio: row.audio,
       stats: row.stats,
       segments,
       answers,
+      cost:
+        row.stats && usage
+          ? estimateSessionCost({
+              transcriptionModel: usage.transcriptionModel,
+              audioSeconds: row.stats.audioSeconds.interviewer + row.stats.audioSeconds.candidate,
+              models: usage.models,
+              durationMs: row.durationMs,
+            })
+          : null,
     };
   };
 
@@ -369,6 +386,7 @@ export function sessionModule(ctx: EngineContext): SessionModule {
         label: channel,
       }),
       transcribeChannels,
+      echoCancellation: settings.audio.echoCancellation,
       saveSegment: params.mode === 'interview' ? (seg) => repo().addSegment(id, seg).id : null,
       checkpoint:
         params.mode === 'interview'
@@ -402,6 +420,7 @@ export function sessionModule(ctx: EngineContext): SessionModule {
                 save: {
                   question: (row) => repo().saveQuestion(row),
                   answer: (row) => repo().saveAnswer(row),
+                  check: (answerId, check) => repo().saveAnswerCheck(answerId, check),
                 },
                 emit: {
                   answer: (answer) => ctx.emit('live.answer', answer),

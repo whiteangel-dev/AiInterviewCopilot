@@ -19,3 +19,7 @@ export * from './stt/fake';
 export * from './stt/gemini-live';
 export * from './stt/types';
 export * from './live/turns';
+export * from './live/hedge';
+export * from './providers/metered';
+export * from './pricing';
+export * from './audio/aec';

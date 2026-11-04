@@ -1,5 +1,6 @@
 import type {
   AnswerCategory,
+  AnswerCheck,
   AnswerLength,
   AnswerSource,
   AnswerTrigger,
@@ -279,6 +280,8 @@ export const sessionAnswers = sqliteTable(
     inputTokens: integer('input_tokens'),
     cachedTokens: integer('cached_tokens'),
     outputTokens: integer('output_tokens'),
+    /** Background fact check (Phase 5). */
+    check: text('check', { mode: 'json' }).$type<AnswerCheck>(),
     createdAt: integer('created_at').notNull(),
     updatedAt: integer('updated_at').notNull(),
   },

@@ -180,6 +180,23 @@ export interface LiveAnswer {
   /** Listening time (ms since the session started) when the interviewer stopped. */
   askedAtMs: number;
   createdAt: number;
+  /** Background fact check of a generated answer; null when not checked. */
+  check: AnswerCheck | null;
+}
+
+/** A statement in an answer that the profile and notes don't support. */
+export interface AnswerIssue {
+  /** Exact words from the answer. */
+  quote: string;
+  problem: string;
+  /** What the sources say instead, if anything. */
+  fix: string | null;
+}
+
+export interface AnswerCheck {
+  status: 'checking' | 'ok' | 'issues' | 'error';
+  issues: AnswerIssue[];
+  model: string | null;
 }
 
 /** What the copilot is doing about the interviewer's current turn (for a subtle indicator). */
@@ -234,6 +251,47 @@ export interface SessionStats {
   echoDropped: number;
   /** Turn detection counters (Phase 4); absent on older sessions. */
   turns?: TurnStats;
+  /** Model requests and tokens (Phase 5); absent on older sessions. */
+  usage?: SessionUsage;
+}
+
+/** Live model requests for one model during a session. */
+export interface ModelUsage {
+  /** Requests sent, including duplicates (hedges), fallbacks and cancelled ones. */
+  requests: number;
+  /** Requests cancelled before they finished (the turn changed, a duplicate won). */
+  cancelled: number;
+  /** Reported by the provider. */
+  inputTokens: number;
+  cachedTokens: number;
+  outputTokens: number;
+  /** Input tokens of requests that reported no usage (cancelled), estimated from the prompt. */
+  estimatedInputTokens: number;
+}
+
+export interface SessionUsage {
+  /** The transcription model used (priced per minute of audio sent). */
+  transcriptionModel: string;
+  /** Per model ID. */
+  models: Record<string, ModelUsage>;
+  /** Duplicate requests sent because the first was slow. */
+  hedges: number;
+  /** Requests answered by a fallback model after the first one failed. */
+  failovers: number;
+}
+
+/** What a session cost on the user's key, estimated from published prices (USD). */
+export interface SessionCost {
+  /** null when the transcription model's price isn't known. */
+  transcriptionUsd: number | null;
+  modelsUsd: number;
+  totalUsd: number;
+  /** null for sessions under a minute. */
+  perHourUsd: number | null;
+  /** Models used whose prices aren't known (left out of the total). */
+  unpriced: string[];
+  /** When the prices were last checked (YYYY-MM-DD). */
+  pricesChecked: string;
 }
 
 export interface TurnStats {
@@ -265,6 +323,7 @@ export interface SessionAnswer {
   latencyMs: number | null;
   askedAtMs: number;
   createdAt: number;
+  check: AnswerCheck | null;
 }
 
 export interface SessionDetail extends SessionSummary {
@@ -273,6 +332,8 @@ export interface SessionDetail extends SessionSummary {
   segments: TranscriptSegment[];
   /** Answers shown during the interview, oldest first (withdrawn ones excluded). */
   answers: SessionAnswer[];
+  /** null for sessions from before Phase 5. */
+  cost: SessionCost | null;
 }
 
 export const TranscriptFormatSchema = z.enum(['markdown', 'text']);

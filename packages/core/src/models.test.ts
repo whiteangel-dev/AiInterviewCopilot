@@ -32,6 +32,7 @@ describe('models', () => {
     const models = [
       m('gemini-3.9-flash-lite'),
       m('gemini-3.5-flash-lite'),
+      m('gemini-3.1-flash-lite'),
       m('gemini-3.1-pro-preview'),
       m('gemini-3.5-transcribe-live', 'live'),
     ];
@@ -51,6 +52,9 @@ describe('models', () => {
       turnAnalyzer: 'gemini-3.1-flash-lite',
       answerFast: 'gemini-3.1-flash-lite',
       answerQuality: 'gemini-2.5-pro',
+      // Not the same model as Fast answers.
+      liveBackup: 'gemini-2.5-flash-lite',
+      factCheck: 'gemini-3.1-flash-lite',
       preparation: 'gemini-2.5-pro',
     });
   });

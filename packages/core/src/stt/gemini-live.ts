@@ -21,6 +21,13 @@ import type { SttHandlers, SttProvider, SttStream, SttStreamOptions } from './ty
  * utterance is cut in half. Transcription needs no conversation state, so a
  * fresh connection loses nothing. If a connection drops, audio is buffered
  * (up to 15 s) and sent once it reconnects.
+ *
+ * Only speech is sent (Phase 5): audio is billed per second sent, and an
+ * interview is mostly one side listening. The gate opens on the local voice
+ * detector's speech with 400 ms of audio from before it, stays open 800 ms
+ * after it (the service needs 300 ms of silence to finish an utterance), then
+ * ends the audio stream. A connection that gets no audio for about a minute is
+ * closed by the server, so 100 ms of silence is sent every 15 s while idle.
  */
 
 export interface LiveConnection {
@@ -54,6 +61,15 @@ export interface GeminiLiveTiming {
   setupTimeoutMs: number;
   /** Audio kept while disconnected. */
   maxBufferMs: number;
+  /** Send only speech (with padding); null sends everything. */
+  gate: {
+    /** Audio from before the speech started. */
+    preRollMs: number;
+    /** Audio after the speech ended. */
+    tailMs: number;
+    /** While idle, send 100 ms of silence this often so the server keeps the connection. */
+    keepAliveMs: number;
+  } | null;
 }
 
 export const DEFAULT_LIVE_TIMING: GeminiLiveTiming = {
@@ -64,6 +80,7 @@ export const DEFAULT_LIVE_TIMING: GeminiLiveTiming = {
   retryDelaysMs: [250, 1_000, 2_000, 4_000, 5_000],
   setupTimeoutMs: 10_000,
   maxBufferMs: 15_000,
+  gate: { preRollMs: 400, tailMs: 800, keepAliveMs: 15_000 },
 };
 
 const FRAME_MS = 20;
@@ -175,6 +192,10 @@ class GeminiLiveStream implements SttStream {
   #retryTimer: ReturnType<typeof setTimeout> | undefined;
   #silentMs = 0;
   #count = 0;
+  #gateOpen = false;
+  #tailLeftMs = 0;
+  #preRoll: Int16Array[] = [];
+  #lastSentAt: number;
   #useVocabulary: boolean;
   #everConnected = false;
   #fatal = false;
@@ -187,14 +208,44 @@ class GeminiLiveStream implements SttStream {
     private readonly now: () => number,
   ) {
     this.#useVocabulary = options.vocabulary.length > 0;
+    this.#lastSentAt = now();
     this.handlers.onState('connecting', null);
     this.#connect();
   }
 
   write(pcm: Int16Array, speaking: boolean): void {
     if (this.#closed) return;
-    this.stats.audioSeconds += FRAME_MS / 1000;
     this.#silentMs = speaking ? 0 : this.#silentMs + FRAME_MS;
+    const gate = this.timing.gate;
+    if (!gate) {
+      this.#send(pcm);
+    } else if (speaking) {
+      if (!this.#gateOpen) {
+        this.#gateOpen = true;
+        for (const frame of this.#preRoll) this.#send(frame);
+        this.#preRoll = [];
+      }
+      this.#tailLeftMs = gate.tailMs;
+      this.#send(pcm);
+    } else if (this.#gateOpen) {
+      this.#send(pcm);
+      this.#tailLeftMs -= FRAME_MS;
+      if (this.#tailLeftMs <= 0) {
+        this.#gateOpen = false;
+        this.#endAudio();
+      }
+    } else {
+      this.#preRoll.push(pcm);
+      if (this.#preRoll.length > gate.preRollMs / FRAME_MS) this.#preRoll.shift();
+      if (this.now() - this.#lastSentAt >= gate.keepAliveMs) this.#keepAlive();
+    }
+    this.#maybeRoll();
+  }
+
+  /** Sends a frame, or keeps it while (re)connecting. Counts what is billed. */
+  #send(pcm: Int16Array) {
+    this.stats.audioSeconds += FRAME_MS / 1000;
+    this.#lastSentAt = this.now();
     const conn = this.#current;
     if (conn?.live && conn.readyAt !== null && !conn.closing) {
       try {
@@ -206,7 +257,31 @@ class GeminiLiveStream implements SttStream {
     } else if (!this.#fatal) {
       this.#keep(pcm);
     }
-    this.#maybeRoll();
+  }
+
+  /** The speech ended: the service finishes the utterance now. */
+  #endAudio() {
+    const conn = this.#current;
+    if (!conn?.live || conn.readyAt === null || conn.closing) return;
+    try {
+      conn.live.endAudio();
+    } catch {
+      // the connection is going away; reconnect handles it
+    }
+  }
+
+  /** 100 ms of silence, only to a connected stream (never buffered). */
+  #keepAlive() {
+    const conn = this.#current;
+    this.#lastSentAt = this.now();
+    if (!conn?.live || conn.readyAt === null || conn.closing) return;
+    const silence = new Int16Array(1600);
+    try {
+      conn.live.send(silence);
+      this.stats.audioSeconds += 0.1;
+    } catch {
+      this.#lost(conn, 'send failed');
+    }
   }
 
   close(): void {

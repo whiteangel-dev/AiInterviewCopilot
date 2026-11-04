@@ -6,6 +6,8 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { KnowledgeItemFields } from '@aic/ipc';
+import { buildSessionContext, compileKnowledge } from '@aic/prompts';
 
 export const ROOT = join(__dirname, '..');
 export const FIXTURES = join(ROOT, 'spikes/src/fixtures');
@@ -83,4 +85,38 @@ export function saveResult(name: string, data: unknown): string {
 /** Prints to stdout (vitest shows it with --silent=false). */
 export function report(lines: string | string[]): void {
   process.stdout.write(`${Array.isArray(lines) ? lines.join('\n') : lines}\n`);
+}
+
+/** knowledge.md → notes: "Answer instructions" are instructions, the rest facts. */
+export function knowledgeItems(): KnowledgeItemFields[] {
+  const items: KnowledgeItemFields[] = [];
+  let section = '';
+  for (const line of loadKnowledgeNotes().split('\n')) {
+    if (line.startsWith('## ')) section = line.slice(3).trim();
+    else if (line.startsWith('- ')) {
+      items.push({
+        kind: section === 'Answer instructions' ? 'instruction' : 'fact',
+        category:
+          section === 'Answer instructions'
+            ? 'style'
+            : section === 'Target company'
+              ? 'company'
+              : 'experience',
+        title: '',
+        content: line.slice(2).trim(),
+      });
+    }
+  }
+  return items;
+}
+
+/** The session context the app builds for the fixture candidate. */
+export function fixtureContext(): string {
+  return buildSessionContext({
+    today: '2026-11-04',
+    company: 'Kestrel Pay',
+    role: 'Senior Backend Engineer, Ledger team',
+    brief: loadProfileBrief(),
+    knowledge: compileKnowledge(knowledgeItems()),
+  }).text;
 }

@@ -240,8 +240,10 @@ describe('sessions helpers', () => {
         latencyMs: 900,
         askedAtMs: 2000,
         createdAt: 0,
+        check: null,
       },
     ],
+    cost: null,
   };
 
   it('formats clocks and exports plain text', () => {
