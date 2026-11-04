@@ -68,6 +68,10 @@ const fields = {
     showOnStart: z.boolean(),
     fontSize: CopilotFontSizeSchema,
   },
+  phone: {
+    /** Show the live answers on a phone on the same Wi-Fi (a local web page). */
+    enabled: z.boolean(),
+  },
   hotkeys: {
     toggleCopilot: AcceleratorSchema.nullable(),
     pauseListening: AcceleratorSchema.nullable(),
@@ -83,6 +87,7 @@ export const SettingsSchema = z.strictObject({
   privacy: z.strictObject(fields.privacy),
   audio: z.strictObject(fields.audio),
   copilot: z.strictObject(fields.copilot),
+  phone: z.strictObject(fields.phone),
   hotkeys: z.strictObject(fields.hotkeys),
 });
 
@@ -114,6 +119,7 @@ export const DEFAULT_SETTINGS: Settings = {
     showOnStart: true,
     fontSize: 'medium',
   },
+  phone: { enabled: false },
   hotkeys: {
     toggleCopilot: 'CommandOrControl+Alt+Space',
     pauseListening: 'CommandOrControl+Alt+P',
@@ -130,6 +136,7 @@ export const SettingsPatchSchema = z.strictObject({
   privacy: z.strictObject(fields.privacy).partial().optional(),
   audio: z.strictObject(fields.audio).partial().optional(),
   copilot: z.strictObject(fields.copilot).partial().optional(),
+  phone: z.strictObject(fields.phone).partial().optional(),
   hotkeys: z.strictObject(fields.hotkeys).partial().optional(),
 });
 

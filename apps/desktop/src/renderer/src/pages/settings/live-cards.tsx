@@ -1,6 +1,9 @@
 import { DEFAULT_SETTINGS, type HotkeyAction, type HotkeyStatus, type Settings } from '@aic/ipc';
 import { acceleratorFromKey, formatAccelerator } from '@aic/ipc/hotkeys';
-import { AudioLines, Keyboard, PanelRight } from 'lucide-react';
+import { AudioLines, Keyboard, PanelRight, Smartphone } from 'lucide-react';
+import { PhoneQr } from '../../components/phone-qr';
+import { usePhone } from '../../lib/use-phone';
+import { ConfirmDialog } from '../../components/ui/alert-dialog';
 import { useEffect, useState } from 'react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -29,6 +32,63 @@ export function AudioLinkCard() {
           </Button>
         }
       />
+    </Card>
+  );
+}
+
+export function PhoneCard() {
+  const enabled = useApp((s) => s.settings?.phone.enabled);
+  const updateSettings = useApp((s) => s.updateSettings);
+  const toast = useApp((s) => s.toast);
+  const status = usePhone();
+  if (enabled === undefined) return null;
+
+  return (
+    <Card id="phone">
+      <CardHeader
+        icon={<Smartphone />}
+        title="Phone screen"
+        description="See the answers on your phone (iPhone or Android) during an interview, in its web browser. Nothing to install."
+        action={
+          <Segmented
+            label="Phone screen"
+            value={enabled ? 'on' : 'off'}
+            options={onOff}
+            onChange={(v) => void updateSettings({ phone: { enabled: v === 'on' } })}
+          />
+        }
+      />
+      {enabled && status && (
+        <CardBody className="space-y-4">
+          {status.running ? (
+            <PhoneQr status={status} />
+          ) : (
+            <p className="text-[13px] text-muted-foreground">{status.error ?? 'Starting…'}</p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Works on the same Wi-Fi as this computer. If Windows asks whether to allow AI Interview
+            Copilot on networks, allow it on private networks. Use a private network (home or
+            office), not public Wi-Fi: the page isn't encrypted on the network.
+          </p>
+          <ConfirmDialog
+            title="Unpair all phones?"
+            description={
+              <p>Phones that scanned the code are disconnected and have to scan the new one.</p>
+            }
+            confirmLabel="Unpair"
+            onConfirm={() =>
+              void invoke('phone:unpair')
+                .then(() => toast('success', 'Phones unpaired. Scan the new code to connect.'))
+                .catch((err: unknown) => toast('error', String(err)))
+            }
+            trigger={
+              <Button size="sm" variant="secondary">
+                Unpair all phones
+              </Button>
+            }
+          />
+        </CardBody>
+      )}
     </Card>
   );
 }

@@ -21,6 +21,7 @@ import { KEY_FILE_EXTENSION, createKeyFile, expiryText, readKeyFile } from './ke
 import { broadcast, type InvokeHandlers } from './ipc';
 import type { AppPaths } from './paths';
 import type { SecretStore } from './secret-store';
+import type { PhoneScreen } from './phone';
 import type { Updates } from './updater';
 
 interface Context {
@@ -31,6 +32,7 @@ interface Context {
   copilot: CopilotWindow;
   hotkeys: Hotkeys;
   updates: Updates;
+  phone: PhoneScreen;
   /** Parent for dialogs. */
   mainWindow: () => BrowserWindow | null;
 }
@@ -62,6 +64,7 @@ export function createInvokeHandlers({
   copilot,
   hotkeys,
   updates,
+  phone,
   mainWindow,
 }: Context): InvokeHandlers {
   /** Checks a key with Google, keeps it in the OS-protected store and makes it active. */
@@ -232,5 +235,7 @@ export function createInvokeHandlers({
     'app:updateStatus': () => updates.status,
     'app:checkForUpdates': () => updates.check(),
     'app:installUpdate': () => updates.install(),
+    'phone:status': () => phone.status,
+    'phone:unpair': () => phone.unpair(),
   };
 }

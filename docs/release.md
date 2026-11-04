@@ -91,3 +91,4 @@ These are ignored in packaged builds:
 | `AIC_PASSWORD_STORE=basic` | Linux: skip the OS keyring |
 | `AIC_LIVE_TESTS=1` | Run the live Gemini tests, using the key in `.env.local` |
 | `AIC_DISABLE_UPDATES=1` | No automatic update checks (also honored by packaged builds) |
+| `AIC_PHONE_HOST=127.0.0.1` | The phone screen listens only on this address (tests) |

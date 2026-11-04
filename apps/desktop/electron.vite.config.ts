@@ -44,6 +44,8 @@ export default defineConfig({
           index: resolve(__dirname, 'src/renderer/index.html'),
           copilot: resolve(__dirname, 'src/renderer/copilot.html'),
           capture: resolve(__dirname, 'src/renderer/capture.html'),
+          // Served to phones on the local network (src/main/phone-server.ts).
+          phone: resolve(__dirname, 'src/renderer/phone.html'),
         },
       },
     },

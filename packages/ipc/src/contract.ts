@@ -21,6 +21,7 @@ import {
   type AppInfo,
   type EngineStatus,
   type ModelCatalog,
+  type PhoneStatus,
   type UpdateStatus,
 } from './types';
 
@@ -62,6 +63,8 @@ export const invokeContract = {
   'app:updateStatus': NoInput,
   'app:checkForUpdates': NoInput,
   'app:installUpdate': NoInput,
+  'phone:status': NoInput,
+  'phone:unpair': NoInput,
   'engine:getStatus': NoInput,
   'settings:get': NoInput,
   'settings:update': SettingsPatchSchema,
@@ -237,6 +240,8 @@ export interface InvokeOutputs extends ForwardedOutputs {
   'app:updateStatus': UpdateStatus;
   'app:checkForUpdates': UpdateStatus;
   'app:installUpdate': void;
+  'phone:status': PhoneStatus;
+  'phone:unpair': PhoneStatus;
   'engine:getStatus': EngineStatus;
   'settings:get': Settings;
   'settings:update': Settings;
@@ -271,6 +276,7 @@ export interface EventPayloads {
   'copilot:visibility': boolean;
   'hotkeys:status': HotkeyStatus[];
   'app:update': UpdateStatus;
+  'phone:status': PhoneStatus;
 }
 
 // Each forwarded channel's validated input must be what its engine method takes.

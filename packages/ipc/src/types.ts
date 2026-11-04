@@ -86,6 +86,19 @@ export type UpdateStatus =
   | { state: 'ready'; version: string }
   | { state: 'error'; message: string };
 
+/** The phone second screen (a local web page, Phase 8). */
+export interface PhoneStatus {
+  enabled: boolean;
+  /** Serving on the local network. */
+  running: boolean;
+  /** Links with the pairing token, one per local address (the first goes in the QR code). */
+  urls: string[];
+  /** Phones connected right now. */
+  clients: number;
+  /** Why it isn't running, when it should be. */
+  error: string | null;
+}
+
 export type EngineState = 'starting' | 'ready' | 'restarting' | 'failed';
 
 export interface EngineStatus {

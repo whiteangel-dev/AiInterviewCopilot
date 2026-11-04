@@ -8,9 +8,13 @@ import {
   Pause,
   Play,
   Radio,
+  Smartphone,
   Square,
   TriangleAlert,
 } from 'lucide-react';
+import { PhoneQr } from '../../components/phone-qr';
+import { usePhone } from '../../lib/use-phone';
+import { Dialog } from '../../components/ui/dialog';
 import { useState } from 'react';
 import { AnswerCard } from '../../components/live/answer-card';
 import { LevelMeter } from '../../components/live/level-meter';
@@ -230,6 +234,9 @@ function LiveView({ state }: { state: LiveState }) {
   const platform = useApp((s) => s.info?.platform ?? 'win32');
   const elapsed = useElapsed(state);
   const [stopping, setStopping] = useState(false);
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const phone = usePhone();
+  const updateSettings = useApp((s) => s.updateSettings);
   const act = (fn: () => Promise<void>) => () =>
     void fn().catch((err: unknown) => toast('error', errorMessage(err)));
   const live = state.status === 'live';
@@ -251,6 +258,15 @@ function LiveView({ state }: { state: LiveState }) {
         }
         action={
           <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setPhoneOpen(true)}
+              data-testid="open-phone"
+            >
+              <Smartphone aria-hidden /> Phone
+              {!!phone?.clients && <Badge tone="success">{phone.clients}</Badge>}
+            </Button>
             <Button
               size="sm"
               variant="secondary"
@@ -288,6 +304,23 @@ function LiveView({ state }: { state: LiveState }) {
           </div>
         }
       />
+      <Dialog
+        open={phoneOpen}
+        onOpenChange={setPhoneOpen}
+        title="Answers on your phone"
+        description="Open this interview's answers on a phone on the same Wi-Fi."
+      >
+        {phone?.running ? (
+          <PhoneQr status={phone} />
+        ) : (
+          <div className="space-y-3 text-[13px] text-muted-foreground">
+            <p>{phone?.error ?? 'The phone screen is off.'}</p>
+            <Button size="sm" onClick={() => void updateSettings({ phone: { enabled: true } })}>
+              Turn on the phone screen
+            </Button>
+          </div>
+        )}
+      </Dialog>
       <CardBody className="space-y-4">
         <div className="grid grid-cols-2 gap-6">
           <LevelMeter

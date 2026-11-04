@@ -26,6 +26,8 @@ A Windows app that listens to your job interview and, about a second after each 
    - `Ctrl+Alt+Space` shows or hides it.
    - `Ctrl+Alt+Enter` answers right away.
 
+**On your phone too:** go to Settings → **Phone screen** → On, then scan the QR code with your phone on the same Wi-Fi. The answers show in the phone's browser, with nothing to install.
+
 **Your data:** your resume, notes and transcripts stay on your computer, and no audio is saved.
 
 **Sharing your key:** to let someone use the app with your key, go to Settings → **Share your key** → **Create key file**:
@@ -48,7 +50,8 @@ The app never shows them the key, but it can't make the key secret from them. Gi
 | 5 | Hardening: duplicate and backup requests, fact check, echo cancellation, speech-only transcription, cost per session | Done ([summary](docs/phase5/summary.md)); about **$0.57 per interview hour** on your key (estimated) |
 | 6 | Windows release: public downloads, automatic updates, first-run setup, free keys; key files (1.1.0) | Done ([summary](docs/phase6/summary.md)) |
 | 7 | Faster answers on Windows: **about 1.0 s** from the interviewer's last word | Done ([summary](docs/phase7/summary.md)) |
-| 8–10 | Phone as a second screen, macOS, phone-only listening | Next |
+| 8 | Phone as a second screen: answers on an iPhone or Android phone, in its browser (1.3.0) | Done ([summary](docs/phase8/summary.md)) |
+| 9–10 | macOS, phone-only listening | Next |
 
 ## For developers
 

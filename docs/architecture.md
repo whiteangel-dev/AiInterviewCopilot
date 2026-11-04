@@ -48,7 +48,7 @@ A Windows-first (macOS later) desktop app. It listens to a live job interview, d
 - **Main process** stays light; if it blocks, every window freezes.
 - **Engine** runs the whole live pipeline in an Electron `utilityProcess`. Heavy jobs (resume parsing, embeddings) run on worker threads.
 - **Renderers** are sandboxed, use `contextIsolation`, have no Node.js access and a strict CSP. The packaged UI loads from `app://renderer/`, not `file://`.
-- **Live events** (transcript, meters, state, answers as they stream) go from the engine through main to both windows. A direct engine → renderer MessagePort remains an option, but answer streams didn't need it ([ADR 0009](adr/0009-live-listening.md), [ADR 0010](adr/0010-live-answers.md)).
+- **Live events** (transcript, meters, state, answers as they stream) go from the engine through main to both windows, and, while the phone screen is on, to phones on the local network ([ADR 0015](adr/0015-phone-screen.md)). A direct engine → renderer MessagePort remains an option, but answer streams didn't need it ([ADR 0009](adr/0009-live-listening.md), [ADR 0010](adr/0010-live-answers.md)).
 - **IPC:**
   - renderer → main uses one allowlisted `invoke` bridge; main checks the sender, validates every payload with Zod, and replies with a `Result` envelope that keeps error codes;
   - main ↔ engine uses a typed RPC (`@aic/ipc`) with timeouts and events;
@@ -199,7 +199,7 @@ spikes/              Phase 0 benchmarks and fixtures (kept as reference)
 | 5 | Speed and quality hardening: fact check, echo cancellation, provider failover, cost per interview hour | **Done** ([summary](phase5/summary.md)); real-speaker test on a Windows PC; a second provider when a key is available |
 | 6 | Windows release: public downloads (GitHub Releases), automatic updates, first-run setup, free keys. Licensing and privacy work dropped by the owner: anyone can just use it | **Done** ([summary](phase6/summary.md)); signing waits for a certificate |
 | 7 | Faster answers on Windows (the main platform) | **Done** ([summary](phase7/summary.md)) |
-| 8 | Phone as a second screen (iPhone and Android, in the phone's browser) | Next |
-| 9 | macOS | |
+| 8 | Phone as a second screen (iPhone and Android, in the phone's browser) | **Done** ([summary](phase8/summary.md)) |
+| 9 | macOS | Next |
 | 10 | Phone-only listening (the phone's own microphone): iPhone and Android apps | |
 | 11 | Practice mode, offline mode, analytics | |

@@ -32,6 +32,7 @@ import { hardenWebContents, isTrustedUrl, trustedOrigins } from './security';
 import { runSmokeTest } from './smoke-test';
 import { applyTheme, cacheTheme, readCachedTheme } from './theme';
 import type * as ElectronUpdater from 'electron-updater';
+import { PhoneScreen } from './phone';
 import { Updates, type UpdaterLike } from './updater';
 
 // ── Before ready ────────────────────────────────────────────────────────────
@@ -224,12 +225,25 @@ async function main(): Promise<void> {
     log.child('hotkeys'),
   );
 
+  // The phone second screen: a local web page fed with the same live events.
+  const phone = new PhoneScreen({
+    host,
+    secrets,
+    rendererRoot: join(__dirname, '../renderer'),
+    ...(!app.isPackaged && process.env.AIC_PHONE_HOST
+      ? { listenHost: process.env.AIC_PHONE_HOST }
+      : {}),
+    log: log.child('phone'),
+    onStatus: (status) => broadcast('phone:status', status),
+  });
+
   let currentSettings: Settings | null = null;
   const applySettings = (settings: Settings) => {
     currentSettings = settings;
     applyTheme(settings.appearance.theme);
     cacheTheme(paths.uiCache, settings.appearance.theme);
     copilot.apply(settings.copilot);
+    void phone.apply(settings.phone.enabled);
     if (hotkeys.apply(settings.hotkeys)) broadcast('hotkeys:status', hotkeys.statuses);
   };
 
@@ -251,6 +265,7 @@ async function main(): Promise<void> {
   let liveRunning = false;
   host.events.on('live.state', (state) => {
     broadcast('live:state', state);
+    phone.broadcast('live:state', state);
     liveRunning =
       !!state &&
       (state.status === 'starting' || state.status === 'live' || state.status === 'paused');
@@ -260,9 +275,18 @@ async function main(): Promise<void> {
     }
   });
   host.events.on('live.meter', (meter) => broadcast('live:meter', meter));
-  host.events.on('live.transcript', (update) => broadcast('live:transcript', update));
-  host.events.on('live.answer', (answer) => broadcast('live:answer', answer));
-  host.events.on('live.turn', (update) => broadcast('live:turn', update));
+  host.events.on('live.transcript', (update) => {
+    broadcast('live:transcript', update);
+    phone.broadcast('live:transcript', update);
+  });
+  host.events.on('live.answer', (answer) => {
+    broadcast('live:answer', answer);
+    phone.broadcast('live:answer', answer);
+  });
+  host.events.on('live.turn', (update) => {
+    broadcast('live:turn', update);
+    phone.broadcast('live:turn', update);
+  });
   host.events.on('capture.open', (request) => capture.open(request));
   host.events.on('capture.close', ({ runId }) => capture.close(runId));
 
@@ -309,6 +333,7 @@ async function main(): Promise<void> {
       copilot,
       hotkeys,
       updates,
+      phone,
       mainWindow: () => mainWindow,
     }),
     isTrustedSender,
@@ -351,7 +376,7 @@ async function main(): Promise<void> {
   app.on('before-quit', (event) => {
     if (shutdownComplete) return;
     event.preventDefault();
-    void host.stop().finally(() => {
+    void Promise.allSettled([phone.stop(), host.stop()]).finally(() => {
       shutdownComplete = true;
       log.info('stopped');
       log.close();
