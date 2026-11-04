@@ -1,8 +1,9 @@
 import type { Settings } from '@aic/ipc';
+import { formatAccelerator } from '@aic/ipc/hotkeys';
 import { EyeOff, Pause, Play, Square } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { AnswerCard } from '../components/live/answer-card';
 import { LevelMeter } from '../components/live/level-meter';
-import { SuggestionCard } from '../components/live/suggestion-card';
 import { TranscriptView } from '../components/live/transcript-view';
 import { LiveWarnings } from '../components/live/warnings';
 import { formatClock, isActive, useElapsed, useLive } from '../live-store';
@@ -44,18 +45,20 @@ function IconButton({
 
 export function CopilotApp() {
   const live = useLive();
-  const { state, meter, segments, interim, suggestion } = live;
-  const [fontSize, setFontSize] = useState<Settings['copilot']['fontSize']>('medium');
+  const { state, meter, segments, interim, answers, phase } = live;
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmStop, setConfirmStop] = useState(false);
   const elapsed = useElapsed(state);
+  const fontSize = settings?.copilot.fontSize ?? 'medium';
+  const answerKey = settings?.hotkeys.answerNow;
 
   useEffect(() => {
     void live.init().catch((err: unknown) => setError(errorMessage(err)));
     void invoke('settings:get')
-      .then((s) => setFontSize(s.copilot.fontSize))
+      .then(setSettings)
       .catch(() => undefined);
-    return on('settings:changed', (s) => setFontSize(s.copilot.fontSize));
+    return on('settings:changed', setSettings);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -64,6 +67,13 @@ export function CopilotApp() {
     const t = setTimeout(() => setConfirmStop(false), 3000);
     return () => clearTimeout(t);
   }, [confirmStop]);
+
+  // Short-lived notices ("nothing to answer yet") clear themselves.
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(t);
+  }, [error]);
 
   const act = (fn: () => Promise<void>) => () =>
     void fn().catch((err: unknown) => setError(errorMessage(err)));
@@ -145,25 +155,26 @@ export function CopilotApp() {
 
       {!interview ? (
         <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
-          Start an interview in the main window. The live transcript and suggestions will appear
-          here.
+          Start an interview in the main window. Answers and the live transcript will appear here.
         </div>
       ) : (
         <>
-          {suggestion && (
-            <div className="shrink-0 border-b border-border p-2">
-              <SuggestionCard
-                suggestion={suggestion}
-                onDismiss={() => useLive.setState({ suggestion: null })}
-                className="max-h-[45vh] overflow-y-auto"
-              />
-            </div>
-          )}
+          <div className="flex min-h-36 flex-[3] p-2 pb-0">
+            <AnswerCard
+              answers={answers}
+              phase={phase}
+              live={status === 'live'}
+              answerNowHint={answerKey ? formatAccelerator(answerKey, window.aic.platform) : null}
+              onAnswerNow={act(live.answerNow)}
+              onRegenerate={(id, length) => act(() => live.regenerate(id, length))()}
+              className="flex-1"
+            />
+          </div>
           <TranscriptView
             segments={segments}
             interim={interim}
             compact
-            className="flex-1 px-3 py-2"
+            className="min-h-20 flex-[2] px-3 py-2 text-[0.93em]"
             emptyText={status === 'live' ? 'Listening…' : 'No transcript yet.'}
           />
           <footer className="shrink-0 space-y-2 border-t border-border px-3 py-2">

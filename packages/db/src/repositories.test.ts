@@ -198,6 +198,80 @@ describe('SessionRepository', () => {
     ).toEqual([live.id, recent.id].sort());
   });
 
+  it('saves questions and answers, updates them in place, and deletes them with the session', () => {
+    const db = open();
+    const repo = new SessionRepository(db.db);
+    const s = newSession(repo, 1000, null);
+    repo.saveQuestion({
+      id: 'q1',
+      sessionId: s.id,
+      heard: 'So tell me about yourself',
+      question: 'So tell me about yourself',
+      type: null,
+      askedAtMs: 4200,
+    });
+    const answer = {
+      id: 'a1',
+      sessionId: s.id,
+      questionId: 'q1',
+      source: 'generated' as const,
+      trigger: 'analyzer' as const,
+      length: 'standard' as const,
+      model: 'flash-lite',
+      preparedAnswerId: null,
+      promptVersion: 'live-answer@1',
+      text: 'Sure.',
+      status: 'streaming' as const,
+      error: null,
+      latencyMs: 950,
+    };
+    repo.saveAnswer(answer);
+    // The analyzer's label and the finished answer arrive later.
+    repo.saveQuestion({
+      id: 'q1',
+      sessionId: s.id,
+      heard: 'So tell me about yourself',
+      question: 'Tell me about yourself.',
+      type: 'background',
+      askedAtMs: 4200,
+    });
+    repo.saveAnswer({
+      ...answer,
+      text: "Sure. I'm a backend engineer.",
+      status: 'done',
+      outputTokens: 9,
+    });
+    repo.saveQuestion({
+      id: 'q2',
+      sessionId: s.id,
+      heard: 'Right?',
+      question: 'Right?',
+      type: null,
+      askedAtMs: 9000,
+    });
+    repo.saveAnswer({ ...answer, id: 'a2', questionId: 'q2', status: 'withdrawn' });
+
+    const answers = repo.answers(s.id);
+    expect(answers).toHaveLength(1);
+    expect(answers[0]).toMatchObject({
+      id: 'a1',
+      text: "Sure. I'm a backend engineer.",
+      status: 'done',
+      latencyMs: 950,
+      outputTokens: 9,
+      question: { question: 'Tell me about yourself.', type: 'background', askedAtMs: 4200 },
+    });
+    expect(repo.answers(s.id, { withdrawn: true })).toHaveLength(2);
+    expect(repo.list()[0]!.answerCount).toBe(1);
+    expect(repo.answerCount(s.id)).toBe(1);
+
+    repo.saveAnswer({ ...answer, id: 'a3', status: 'streaming' });
+    expect(repo.stopStreamingAnswers()).toBe(1);
+
+    repo.delete(s.id);
+    expect(repo.answers(s.id, { withdrawn: true })).toEqual([]);
+  });
+
   it('keeps a session when its profile is deleted', () => {
     const db = open();
     const profiles = new ProfileRepository(db.db);

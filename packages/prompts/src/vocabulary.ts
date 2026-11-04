@@ -11,11 +11,13 @@ const NAME_LIKE = /\b[A-Za-z][A-Za-z0-9]*(?:[A-Z][a-z0-9]*|[0-9])[A-Za-z0-9]*\b/
  * Names and technical terms the speech recognizer should expect in this
  * interview: the candidate's name, employers, projects, technologies, schools
  * and certifications from the profile, plus name-like words from the notes.
- * Most important first, deduplicated, at most 100.
+ * `first` (e.g. the company being interviewed with) leads. Most important
+ * first, deduplicated, at most 100.
  */
 export function buildVocabulary(
   profile: CandidateProfile | null,
   notes: readonly { content: string; title: string }[] = [],
+  first: readonly string[] = [],
 ): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
@@ -28,6 +30,7 @@ export function buildVocabulary(
     out.push(t);
   };
 
+  for (const term of first) add(term);
   if (profile) {
     for (const part of profile.name.split(/\s+/)) if (part.length > 1) add(part);
     for (const e of profile.experience) add(e.company);

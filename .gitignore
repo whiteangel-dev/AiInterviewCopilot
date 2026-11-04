@@ -26,3 +26,6 @@ Thumbs.db
 
 # Native audio module copied into the app by `npm run build -w @aic/native-audio`
 apps/desktop/resources/native/
+
+# Eval results (regenerable; summaries go in docs/)
+evals/results/

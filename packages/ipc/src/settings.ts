@@ -36,6 +36,8 @@ const fields = {
   answers: {
     mode: AnswerModeSchema,
     length: AnswerLengthSchema,
+    /** Detect the interviewer's questions and answer them without being asked. */
+    autoAnswer: z.boolean(),
   },
   privacy: {
     transcriptRetention: TranscriptRetentionSchema,
@@ -63,6 +65,8 @@ const fields = {
   hotkeys: {
     toggleCopilot: AcceleratorSchema.nullable(),
     pauseListening: AcceleratorSchema.nullable(),
+    answerNow: AcceleratorSchema.nullable(),
+    regenerate: AcceleratorSchema.nullable(),
   },
 } as const;
 
@@ -86,7 +90,7 @@ export const SETTINGS_SECTIONS = Object.keys(fields) as SettingsSection[];
 export const DEFAULT_SETTINGS: Settings = {
   appearance: { theme: 'system' },
   models: { ...DEFAULT_MODELS },
-  answers: { mode: 'fast', length: 'standard' },
+  answers: { mode: 'fast', length: 'standard', autoAnswer: true },
   privacy: { transcriptRetention: '90d' },
   audio: {
     backend: 'auto',
@@ -106,6 +110,9 @@ export const DEFAULT_SETTINGS: Settings = {
   hotkeys: {
     toggleCopilot: 'CommandOrControl+Alt+Space',
     pauseListening: 'CommandOrControl+Alt+P',
+    answerNow: 'CommandOrControl+Alt+Enter',
+    // No default: Ctrl+Alt+letter is AltGr+letter on many keyboard layouts.
+    regenerate: null,
   },
 };
 

@@ -1,6 +1,10 @@
 import type {
   AnswerCategory,
+  AnswerLength,
+  AnswerSource,
+  AnswerTrigger,
   AudioChannel,
+  LiveAnswerStatus,
   SessionAudioInfo,
   SessionRecordStatus,
   SessionStats,
@@ -223,6 +227,64 @@ export const transcriptSegments = sqliteTable(
   (t) => [index('transcript_segments_session_idx').on(t.sessionId, t.startMs)],
 );
 
+// ── Live answers (Phase 4) ──────────────────────────────────────────────────
+
+/** A question the interviewer asked that got an answer (shown in the copilot). */
+export const sessionQuestions = sqliteTable(
+  'session_questions',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    /** The interviewer's words, as transcribed. */
+    heard: text('heard').notNull(),
+    /** The standalone question from the turn analyzer, or `heard`. */
+    question: text('question').notNull(),
+    type: text('type'),
+    /** Listening time when the interviewer stopped. */
+    askedAtMs: integer('asked_at_ms').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => [index('session_questions_session_idx').on(t.sessionId, t.askedAtMs)],
+);
+
+/** An answer shown for a question (regenerating adds another). */
+export const sessionAnswers = sqliteTable(
+  'session_answers',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => sessions.id, { onDelete: 'cascade' }),
+    questionId: text('question_id')
+      .notNull()
+      .references(() => sessionQuestions.id, { onDelete: 'cascade' }),
+    source: text('source').$type<AnswerSource>().notNull(),
+    trigger: text('trigger').$type<AnswerTrigger>().notNull(),
+    length: text('length').$type<AnswerLength>().notNull(),
+    model: text('model'),
+    preparedAnswerId: text('prepared_answer_id').references(() => preparedAnswers.id, {
+      onDelete: 'set null',
+    }),
+    promptVersion: text('prompt_version'),
+    text: text('text').notNull(),
+    status: text('status').$type<LiveAnswerStatus>().notNull(),
+    error: text('error'),
+    /** The interviewer's last word → first answer word on screen. */
+    latencyMs: integer('latency_ms'),
+    /** Request → first text from the model. */
+    firstTextMs: integer('first_text_ms'),
+    durationMs: integer('duration_ms'),
+    inputTokens: integer('input_tokens'),
+    cachedTokens: integer('cached_tokens'),
+    outputTokens: integer('output_tokens'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => [index('session_answers_session_idx').on(t.sessionId, t.createdAt)],
+);
+
 export type ProfileRow = typeof profiles.$inferSelect;
 export type ResumeDocumentRow = typeof resumeDocuments.$inferSelect;
 export type ProfileVersionRow = typeof profileVersions.$inferSelect;
@@ -233,3 +295,7 @@ export type PreparedAnswerRow = typeof preparedAnswers.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type TranscriptSegmentRow = typeof transcriptSegments.$inferSelect;
+export type SessionQuestionRow = typeof sessionQuestions.$inferSelect;
+export type NewSessionQuestion = typeof sessionQuestions.$inferInsert;
+export type SessionAnswerRow = typeof sessionAnswers.$inferSelect;
+export type NewSessionAnswer = typeof sessionAnswers.$inferInsert;

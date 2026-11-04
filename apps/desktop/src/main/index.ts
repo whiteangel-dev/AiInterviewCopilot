@@ -207,6 +207,17 @@ async function main(): Promise<void> {
           })
           .catch((err: unknown) => log.warn('pause hotkey failed', { err }));
       },
+      answerNow: () => {
+        if (!copilot.visible) copilot.show();
+        void host
+          .call('live.answerNow')
+          .catch((err: unknown) => log.info('answer-now hotkey did nothing', { err }));
+      },
+      regenerate: () => {
+        void host
+          .call('live.regenerate', { answerId: null, length: null })
+          .catch((err: unknown) => log.info('regenerate hotkey did nothing', { err }));
+      },
     },
     log.child('hotkeys'),
   );
@@ -244,7 +255,8 @@ async function main(): Promise<void> {
   });
   host.events.on('live.meter', (meter) => broadcast('live:meter', meter));
   host.events.on('live.transcript', (update) => broadcast('live:transcript', update));
-  host.events.on('live.suggestion', (suggestion) => broadcast('live:suggestion', suggestion));
+  host.events.on('live.answer', (answer) => broadcast('live:answer', answer));
+  host.events.on('live.turn', (update) => broadcast('live:turn', update));
   host.events.on('capture.open', (request) => capture.open(request));
   host.events.on('capture.close', ({ runId }) => capture.close(runId));
 

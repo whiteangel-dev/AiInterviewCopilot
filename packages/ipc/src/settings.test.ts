@@ -20,7 +20,7 @@ describe('settings', () => {
       unknownSection: { a: 1 },
     });
     expect(settings.appearance.theme).toBe('system');
-    expect(settings.answers).toEqual({ mode: 'quality', length: 'standard' });
+    expect(settings.answers).toEqual({ mode: 'quality', length: 'standard', autoAnswer: true });
     expect(settings.models).toEqual(DEFAULT_SETTINGS.models);
     expect(settings).not.toHaveProperty('unknownSection');
   });

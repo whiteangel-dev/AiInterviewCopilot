@@ -115,6 +115,16 @@ const ACTIONS: { action: HotkeyAction; label: string; description: string }[] = 
     label: 'Pause or resume listening',
     description: 'During an interview.',
   },
+  {
+    action: 'answerNow',
+    label: 'Answer now',
+    description: 'Answers what the interviewer just said, without waiting.',
+  },
+  {
+    action: 'regenerate',
+    label: 'Regenerate the answer',
+    description: 'Writes a new answer to the last question.',
+  },
 ];
 
 function HotkeyRecorder({
@@ -198,7 +208,7 @@ export function HotkeysCard() {
       <CardHeader
         icon={<Keyboard />}
         title="Keyboard shortcuts"
-        description="Click a shortcut, then press the keys you want. Use Ctrl or Alt with another key."
+        description="Click a shortcut, then press the keys you want. Use Ctrl or Alt with another key. Avoid Ctrl+Alt with a letter if your keyboard uses AltGr for symbols."
         action={
           !isDefault && (
             <Button

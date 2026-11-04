@@ -1,86 +1,16 @@
-import { randomBytes } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { encodeWav, tone } from '@aic/core';
-import type { EngineEvents, LiveSuggestion, LiveTranscriptUpdate } from '@aic/ipc';
+import type { LiveTranscriptUpdate, SessionDetail } from '@aic/ipc';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createEngine } from './engine';
 import { exportTranscript, formatClock } from './sessions';
+import { call, cleanup, dirs, setup, speechWav, stops, until } from './test-helpers';
 
-const KEY = 'AIza-unit-test-key-000000000wxyz';
-const dirs: string[] = [];
-const stops: (() => unknown)[] = [];
-
-/** Silence and tone bursts ("speech") at 16 kHz, as a WAV file. */
-function speechWav(dir: string, name: string, pattern: [silenceMs: number, speechMs: number][]) {
-  const parts: Int16Array[] = [];
-  for (const [silence, speech] of pattern) {
-    parts.push(new Int16Array(16 * silence), tone(speech, 300, -20));
-  }
-  parts.push(new Int16Array(16 * 2000));
-  const all = new Int16Array(parts.reduce((n, p) => n + p.length, 0));
-  let o = 0;
-  for (const p of parts) {
-    all.set(p, o);
-    o += p.length;
-  }
-  const file = join(dir, name);
-  writeFileSync(file, encodeWav(all));
-  return file;
-}
-
-async function setup(replay: { interviewer: string | null; candidate: string | null } | null) {
-  const dir = mkdtempSync(join(tmpdir(), 'aic-p3-'));
-  dirs.push(dir);
-  const events: { event: keyof EngineEvents; data: unknown }[] = [];
-  const engine = createEngine({
-    emit: (event, data) => events.push({ event, data }),
-    exit: () => undefined,
-    logToConsole: false,
-    today: () => '2026-11-04',
-  });
-  const h = engine.handlers;
-  const init = {
-    dbPath: join(dir, 'app.db'),
-    dbKeyHex: randomBytes(32).toString('hex'),
-    backupDir: join(dir, 'bk'),
-    logDir: join(dir, 'logs'),
-    appVersion: 'test',
-    fakeProvider: true,
-    nativeAudioPath: null,
-    audioReplay: replay,
-  };
-  await h.init(init);
-  stops.push(() => h.shutdown());
-  await h['apiKey.activate']({ provider: 'gemini', key: KEY, verification: null, models: null });
-  const of = <K extends keyof EngineEvents>(event: K) =>
-    events.filter((e) => e.event === event).map((e) => e.data as EngineEvents[K]);
-  return { h, dir, init, of, engine };
-}
-
-/** Handlers may throw synchronously; the RPC layer turns that into a rejection. */
-const call = async <T>(fn: () => T | Promise<T>): Promise<T> => fn();
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-async function until<T>(fn: () => T | undefined | false, timeoutMs = 8000): Promise<T> {
-  const end = Date.now() + timeoutMs;
-  for (;;) {
-    const v = fn();
-    if (v) return v;
-    if (Date.now() > end) throw new Error('timed out');
-    await sleep(50);
-  }
-}
-
-afterEach(async () => {
-  for (const s of stops.splice(0)) await s();
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
-});
+afterEach(cleanup);
 
 describe('live interview (recorded audio, fake transcription)', () => {
-  it('transcribes both channels, suggests a prepared answer, and saves the session', async () => {
+  it('transcribes both channels, answers from the answer bank, and saves the session', async () => {
     const tmp = mkdtempSync(join(tmpdir(), 'aic-wav-'));
     dirs.push(tmp);
     const interviewer = speechWav(tmp, 'interviewer.wav', [
@@ -142,10 +72,14 @@ describe('live interview (recorded audio, fake transcription)', () => {
     // Interim text grows word by word.
     expect(interims[0]!.segment.text.split(' ').length).toBeLessThanOrEqual(2);
 
-    const suggestion = await until(() =>
-      of('live.suggestion').find((s): s is LiveSuggestion => s !== null),
-    );
-    expect(suggestion.answer.question).toBe('Tell me about yourself.');
+    // The approved answer is shown as it is, without asking the model.
+    const fromBank = await until(() => of('live.answer').find((a) => a.source === 'bank'));
+    expect(fromBank).toMatchObject({
+      runId: started.id,
+      text: "I'm a platform engineer.",
+      status: 'done',
+      heard: 'To get started, can you tell me a little bit about yourself?',
+    });
 
     const meters = of('live.meter');
     expect(meters.length).toBeGreaterThan(10);
@@ -187,7 +121,11 @@ describe('live interview (recorded audio, fake transcription)', () => {
     expect(detail.audio.backend).toBe('replay');
     expect(detail.stats?.audioSeconds.interviewer).toBeGreaterThan(2);
 
-    const md = await h['sessions.export']({ id: started.id, format: 'markdown' });
+    const md = await h['sessions.export']({
+      id: started.id,
+      format: 'markdown',
+      includeAnswers: false,
+    });
     expect(md.fileName).toMatch(/^acme-round-1-\d{4}-\d{2}-\d{2}\.md$/);
     expect(md.text).toContain('# Acme round 1');
     expect(md.text).toContain('**Interviewer** (00:00): Hi, thanks');
@@ -269,31 +207,61 @@ describe('live interview (recorded audio, fake transcription)', () => {
 });
 
 describe('sessions helpers', () => {
+  const session: SessionDetail = {
+    id: 's',
+    title: 'Hello / World',
+    status: 'ended',
+    profileName: null,
+    knowledgeBaseName: null,
+    startedAt: Date.UTC(2026, 10, 4, 12),
+    endedAt: null,
+    durationMs: 61_000,
+    segmentCount: 2,
+    answerCount: 1,
+    audio: { backend: 'native', interviewer: null, candidate: null },
+    stats: null,
+    segments: [
+      { id: 'a', channel: 'interviewer', text: 'Why us?', startMs: 1000, endMs: 2000 },
+      { id: 'b', channel: 'candidate', text: 'Because.', startMs: 3000, endMs: 3500 },
+    ],
+    answers: [
+      {
+        id: 'x',
+        questionId: 'q',
+        question: 'Why us?',
+        heard: 'Why us?',
+        type: 'motivation',
+        source: 'bank',
+        trigger: 'analyzer',
+        length: 'standard',
+        model: null,
+        text: "I like what you're building.\n- Point one",
+        status: 'done',
+        latencyMs: 900,
+        askedAtMs: 2000,
+        createdAt: 0,
+      },
+    ],
+  };
+
   it('formats clocks and exports plain text', () => {
     expect(formatClock(0)).toBe('00:00');
     expect(formatClock(65_400)).toBe('01:05');
     expect(formatClock(3_725_000)).toBe('1:02:05');
-    const out = exportTranscript(
-      {
-        id: 's',
-        title: 'Hello / World',
-        status: 'ended',
-        profileName: null,
-        knowledgeBaseName: null,
-        startedAt: Date.UTC(2026, 10, 4, 12),
-        endedAt: null,
-        durationMs: 61_000,
-        segmentCount: 2,
-        audio: { backend: 'native', interviewer: null, candidate: null },
-        stats: null,
-        segments: [
-          { id: 'a', channel: 'interviewer', text: 'Why us?', startMs: 1000, endMs: 2000 },
-          { id: 'b', channel: 'candidate', text: 'Because.', startMs: 3000, endMs: 3500 },
-        ],
-      },
-      'text',
-    );
+    const out = exportTranscript(session, 'text');
     expect(out.fileName).toMatch(/^hello-world-2026-11-0\d\.txt$/);
     expect(out.text).toContain('[00:01] Interviewer: Why us?\n[00:03] You: Because.');
+    expect(out.text).not.toContain('Suggested answer');
+  });
+
+  it('can include the answers shown, between each question and the reply', () => {
+    const md = exportTranscript(session, 'markdown', true);
+    expect(md.text).toContain(
+      "**Interviewer** (00:01): Why us?\n\n> **Suggested answer (answer bank)**\n> I like what you're building.\n> - Point one\n\n**You** (00:03): Because.",
+    );
+    const text = exportTranscript(session, 'text', true);
+    expect(text.text).toContain(
+      "[00:01] Interviewer: Why us?\n    Suggested answer (answer bank):\n    I like what you're building.\n    - Point one\n[00:03] You: Because.",
+    );
   });
 });

@@ -63,12 +63,11 @@ function setup() {
       return `seg-${saved.length}`;
     },
     checkpoint: null,
-    suggest: null,
+    copilot: null,
     events: {
       state: (s) => states.push(s),
       meter: () => undefined,
       transcript: (u) => updates.push(u),
-      suggestion: () => undefined,
     },
     log: createLogger({ console: false, scope: 'test' }),
     now: () => Date.now(),

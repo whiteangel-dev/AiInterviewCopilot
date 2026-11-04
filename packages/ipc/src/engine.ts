@@ -15,13 +15,15 @@ import type {
   TextQuality,
 } from './profile';
 import type {
+  AnswerLength,
   AudioEnvironment,
+  LiveAnswer,
   LiveMeter,
   LiveStartParams,
   LiveState,
-  LiveSuggestion,
   LiveTranscript,
   LiveTranscriptUpdate,
+  LiveTurnUpdate,
   SessionDetail,
   SessionSummary,
   TranscriptFormat,
@@ -173,13 +175,22 @@ export type EngineMethods = {
   'live.diagnostics': { params: void; result: string };
   /** Electron's built-in capture failed to start or stopped (reported by main). */
   'capture.failed': { params: { runId: string; message: string }; result: void };
+  /** The current run's answers, oldest first (for a window that opens mid-session). */
+  'live.answers': { params: void; result: LiveAnswer[] };
+  /** Answers the interviewer's current turn now, without waiting for turn detection. */
+  'live.answerNow': { params: void; result: void };
+  /** Writes a new answer to the same question, optionally at another length. */
+  'live.regenerate': {
+    params: { answerId: string | null; length: AnswerLength | null };
+    result: void;
+  };
 
   'sessions.list': { params: void; result: SessionSummary[] };
   'sessions.get': { params: { id: string }; result: SessionDetail };
   'sessions.rename': { params: { id: string; title: string }; result: SessionSummary };
   'sessions.delete': { params: { id: string }; result: void };
   'sessions.export': {
-    params: { id: string; format: TranscriptFormat };
+    params: { id: string; format: TranscriptFormat; includeAnswers: boolean };
     result: { fileName: string; text: string };
   };
 };
@@ -192,8 +203,9 @@ export type EngineEvents = {
   'live.state': LiveState | null;
   'live.meter': LiveMeter;
   'live.transcript': LiveTranscriptUpdate;
-  /** null clears the current suggestion. */
-  'live.suggestion': LiveSuggestion | null;
+  /** A new or updated answer (the whole answer each time, also while it streams). */
+  'live.answer': LiveAnswer;
+  'live.turn': LiveTurnUpdate;
   'capture.open': CaptureRequest;
   'capture.close': { runId: string };
 };

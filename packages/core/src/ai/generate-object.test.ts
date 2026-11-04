@@ -21,6 +21,8 @@ function stub(replies: string[]): AiProvider {
         durationMs: 1,
       }),
     ),
+    streamText: (req) => fake.streamText(req),
+    warmUp: () => Promise.resolve(),
     toAppError: (e) => fake.toAppError(e),
   };
 }

@@ -56,6 +56,8 @@ Phase 3 makes the app listen to a real interview: both sides of the call, transc
 - **Export:** Markdown or text, through a save dialog in main, or copied to the clipboard.
 
 ### Answer-bank suggestions
+*Replaced in Phase 4 ([ADR 0010](0010-live-answers.md)): an approved match becomes the answer itself, shown when the turn analyzer confirms the question; drafts are no longer shown live.*
+
 - **When the interviewer finishes a segment,** the interviewer's words since the candidate last spoke (up to 3 segments) are matched against the answer bank.
 - **Matching** scores the whole text, each sentence, and each sentence without its lead-in ("To get started, …").
 - **Approved answers come first;** a draft is shown only if no approved answer matches, and it is labeled "Draft".

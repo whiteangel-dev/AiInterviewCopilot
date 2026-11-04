@@ -1,6 +1,6 @@
 # ADR 0005 — End-of-turn detection: VAD pause + analyzer ∥ speculative answer
 
-- **Status:** Accepted (2026-11-03)
+- **Status:** Accepted (2026-11-03). Built into the app in Phase 4, with turn boundaries and answer withdrawal added: [ADR 0010](0010-live-answers.md).
 
 ## Context
 - Waiting for long silences is slow.

@@ -53,7 +53,8 @@ export class EngineHost {
     'live.state': [EngineEvents['live.state']];
     'live.meter': [EngineEvents['live.meter']];
     'live.transcript': [EngineEvents['live.transcript']];
-    'live.suggestion': [EngineEvents['live.suggestion']];
+    'live.answer': [EngineEvents['live.answer']];
+    'live.turn': [EngineEvents['live.turn']];
     'capture.open': [EngineEvents['capture.open']];
     'capture.close': [EngineEvents['capture.close']];
   }>();
@@ -212,7 +213,8 @@ export class EngineHost {
     client.on('live.state', (s) => this.events.emit('live.state', s));
     client.on('live.meter', (m) => this.events.emit('live.meter', m));
     client.on('live.transcript', (t) => this.events.emit('live.transcript', t));
-    client.on('live.suggestion', (s) => this.events.emit('live.suggestion', s));
+    client.on('live.answer', (a) => this.events.emit('live.answer', a));
+    client.on('live.turn', (t) => this.events.emit('live.turn', t));
     client.on('capture.open', (r) => this.events.emit('capture.open', r));
     client.on('capture.close', (r) => this.events.emit('capture.close', r));
 

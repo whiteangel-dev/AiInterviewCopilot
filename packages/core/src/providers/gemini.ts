@@ -10,13 +10,47 @@ import { AppError, type ModelInfo } from '@aic/ipc';
 import { classifyGeminiModel, compareNewest } from '../models';
 import { redact } from '../redact';
 import { isNetworkError } from './errors';
-import type { AiProvider, StructuredRequest, StructuredResponse } from './types';
+import type {
+  AiProvider,
+  StructuredRequest,
+  StructuredResponse,
+  TextStreamRequest,
+  TextStreamResponse,
+} from './types';
 
 const LIST_TIMEOUT_MS = 10_000;
 const GENERATE_TIMEOUT_MS = 300_000;
+/** A live reply that hasn't finished by now is abandoned. */
+const STREAM_TIMEOUT_MS = 60_000;
 
 /** Models that rejected a thinking setting; they are asked without one from then on. */
 const noThinkingConfig = new Set<string>();
+
+/**
+ * Thinking levels to try for live requests, most preferred first. Models that
+ * reject one (e.g. MINIMAL on a Pro model) move to the next, remembered per model.
+ */
+const LIVE_THINKING: Record<TextStreamRequest['thinking'], (ThinkingLevel | null)[]> = {
+  minimal: [ThinkingLevel.MINIMAL, ThinkingLevel.LOW, null],
+  low: [ThinkingLevel.LOW, null],
+};
+const liveThinkingStep = new Map<string, number>();
+
+/** One client per key, so live requests reuse warm connections. */
+const clients = new Map<string, GoogleGenAI>();
+function liveClient(apiKey: string): GoogleGenAI {
+  let client = clients.get(apiKey);
+  if (!client) {
+    if (clients.size >= 4) clients.clear();
+    client = new GoogleGenAI({ apiKey, httpOptions: { timeout: STREAM_TIMEOUT_MS } });
+    clients.set(apiKey, client);
+  }
+  return client;
+}
+
+const visibleText = (chunk: { candidates?: { content?: { parts?: Part[] } }[] }): string =>
+  chunk.candidates?.[0]?.content?.parts?.map((p) => (p.thought ? '' : (p.text ?? ''))).join('') ??
+  '';
 
 function toPart(part: StructuredRequest['parts'][number]): Part {
   if ('text' in part) return { text: part.text };
@@ -102,6 +136,81 @@ export class GeminiProvider implements AiProvider {
       throw new AppError('provider_error', 'Google declined to process this content.');
     }
     return { text, model: req.model, inputTokens, outputTokens, durationMs: Date.now() - started };
+  }
+
+  async streamText(req: TextStreamRequest): Promise<TextStreamResponse> {
+    const ai = liveClient(req.apiKey);
+    const started = performance.now();
+    const levels = LIVE_THINKING[req.thinking];
+    const key = `${req.model}|${req.thinking}`;
+    const step = liveThinkingStep.get(key) ?? 0;
+    const level = levels[step] ?? null;
+    const config: GenerateContentConfig = {
+      systemInstruction: req.system,
+      maxOutputTokens: req.maxOutputTokens,
+      ...(req.schema
+        ? { responseMimeType: 'application/json', responseJsonSchema: req.schema }
+        : {}),
+      ...(level ? { thinkingConfig: { thinkingLevel: level } } : {}),
+      ...(req.signal ? { abortSignal: req.signal } : {}),
+    };
+
+    let stream;
+    try {
+      stream = await ai.models.generateContentStream({
+        model: req.model,
+        contents: [{ role: 'user', parts: [{ text: req.text }] }],
+        config,
+      });
+    } catch (err) {
+      if (level && step < levels.length - 1 && isThinkingConfigError(err)) {
+        liveThinkingStep.set(key, step + 1);
+        return this.streamText(req);
+      }
+      throw err;
+    }
+
+    let text = '';
+    let firstTextMs: number | null = null;
+    let inputTokens: number | null = null;
+    let cachedTokens: number | null = null;
+    let outputTokens: number | null = null;
+    let finishReason: string | null = null;
+    for await (const chunk of stream) {
+      const piece = visibleText(chunk);
+      if (piece) {
+        firstTextMs ??= Math.round(performance.now() - started);
+        text += piece;
+        req.onText?.(piece);
+      }
+      if (chunk.usageMetadata) {
+        inputTokens = chunk.usageMetadata.promptTokenCount ?? inputTokens;
+        cachedTokens = chunk.usageMetadata.cachedContentTokenCount ?? cachedTokens;
+        outputTokens = chunk.usageMetadata.candidatesTokenCount ?? outputTokens;
+      }
+      finishReason = chunk.candidates?.[0]?.finishReason ?? finishReason;
+    }
+    if (finishReason === 'SAFETY' || finishReason === 'PROHIBITED_CONTENT') {
+      throw new AppError('provider_error', 'Google declined to answer this.');
+    }
+    return {
+      text,
+      model: req.model,
+      inputTokens,
+      cachedTokens,
+      outputTokens,
+      firstTextMs,
+      durationMs: Math.round(performance.now() - started),
+      finishReason,
+    };
+  }
+
+  async warmUp(apiKey: string, model: string): Promise<void> {
+    try {
+      await liveClient(apiKey).models.get({ model });
+    } catch {
+      // Only a head start; the real request reports any problem.
+    }
   }
 
   toAppError(err: unknown): AppError {

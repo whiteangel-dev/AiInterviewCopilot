@@ -5,7 +5,8 @@
   "type": "module",
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    "evals"
   ],
   "engines": {
     "node": ">=24"
@@ -22,7 +23,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check": "npm run lint && npm run format:check && npm run typecheck && npm test",
-    "db:generate": "npm run db:generate -w @aic/db"
+    "db:generate": "npm run db:generate -w @aic/db",
+    "eval:turns": "npm run turns -w @aic/evals",
+    "eval:live": "npm run live -w @aic/evals"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

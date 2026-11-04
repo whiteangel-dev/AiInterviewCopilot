@@ -140,7 +140,7 @@ describe('repositories', () => {
     expect(repo.load()).toEqual(DEFAULT_SETTINGS);
     const changed = {
       ...DEFAULT_SETTINGS,
-      answers: { mode: 'quality' as const, length: 'short' as const },
+      answers: { mode: 'quality' as const, length: 'short' as const, autoAnswer: false },
       appearance: { theme: 'light' as const },
     };
     repo.save(changed, ['answers']);

@@ -13,9 +13,27 @@ export function AnswersCard() {
       <CardHeader
         icon={<MessageSquareText />}
         title="Answers"
-        description="How suggestions are written during an interview."
+        description="How the copilot answers during an interview."
       />
       <CardBody>
+        <Field
+          label="Answer automatically"
+          description={
+            answers.autoAnswer
+              ? 'An answer appears when the interviewer finishes a question.'
+              : 'Answers appear only when you press Answer now (or its shortcut).'
+          }
+        >
+          <Segmented
+            label="Answer automatically"
+            value={answers.autoAnswer ? 'on' : 'off'}
+            options={[
+              { value: 'on', label: 'On' },
+              { value: 'off', label: 'Off' },
+            ]}
+            onChange={(v) => void updateSettings({ answers: { autoAnswer: v === 'on' } })}
+          />
+        </Field>
         <Field
           label="Mode"
           description={

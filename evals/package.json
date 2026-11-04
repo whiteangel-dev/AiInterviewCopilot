@@ -1,0 +1,18 @@
+{
+  "name": "@aic/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Opt-in evaluations against the real Gemini API: turn analyzer and live answers (Phase 4).",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "turns": "AIC_LIVE_TESTS=1 vitest run --project @aic/evals turns",
+    "live": "AIC_LIVE_TESTS=1 vitest run --project @aic/evals live-answers"
+  },
+  "devDependencies": {
+    "@aic/core": "*",
+    "@aic/db": "*",
+    "@aic/ipc": "*",
+    "@aic/prompts": "*"
+  }
+}

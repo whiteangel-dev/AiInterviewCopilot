@@ -1,11 +1,11 @@
 import { z } from 'zod';
-import type { PreparedAnswer } from './answers';
 import type { SerializedError } from './errors';
 import { isValidAccelerator } from './hotkeys';
 
 /**
  * Live listening (Phase 3): audio capture, live transcription, interview
- * sessions and their saved transcripts.
+ * sessions and their saved transcripts. Live answers (Phase 4): turn detection
+ * and answers shown in the copilot.
  */
 
 /** The interviewer is the computer's audio; the candidate is the microphone. */
@@ -129,14 +129,65 @@ export interface LiveTranscript {
   interim: Partial<Record<AudioChannel, TranscriptSegment>>;
 }
 
-/** A prepared answer that matches what the interviewer just asked. */
-export interface LiveSuggestion {
+// ── Live answers (Phase 4) ─────────────────────────────────────────────────
+
+/** `bank`: an approved answer from the answer bank; `generated`: written live. */
+export type AnswerSource = 'bank' | 'generated';
+
+/**
+ * What showed the answer:
+ * - `question-mark`: the turn ended with "?" (shown at once; the analyzer can withdraw it);
+ * - `analyzer`: the turn analyzer decided the interviewer finished a question;
+ * - `fallback`: the analyzer decided after more than a second of silence;
+ * - `manual`: "Answer now";
+ * - `regenerate`: "Regenerate", "Shorter" or "Longer".
+ */
+export type AnswerTrigger = 'question-mark' | 'analyzer' | 'fallback' | 'manual' | 'regenerate';
+
+/**
+ * `streaming` → `done`, or `error`, or `stopped` (the interview ended or was
+ * paused mid-answer). `withdrawn`: shown on the "?" fast path, then the
+ * analyzer decided the interviewer wasn't finished, so it was taken back.
+ */
+export type LiveAnswerStatus = 'streaming' | 'done' | 'error' | 'stopped' | 'withdrawn';
+
+export type AnswerLength = 'short' | 'standard' | 'detailed';
+
+export interface LiveAnswer {
+  /** The run (session) it belongs to. */
+  runId: string;
   id: string;
-  /** The interviewer's words that matched. */
+  questionId: string;
+  /** The question as the analyzer understood it (standalone), or what was heard. */
+  question: string;
+  /** The interviewer's words for this turn, as transcribed. */
   heard: string;
-  answer: PreparedAnswer;
-  score: number;
-  at: number;
+  /** Question type from the analyzer (behavioral, technical, …), when known. */
+  type: string | null;
+  source: AnswerSource;
+  trigger: AnswerTrigger;
+  length: AnswerLength;
+  /** The model that wrote it; null for answer-bank answers. */
+  model: string | null;
+  /** For `bank`: the prepared answer shown. */
+  preparedAnswerId: string | null;
+  /** First line: an opening sentence; then bullets starting with "- ". */
+  text: string;
+  status: LiveAnswerStatus;
+  error: string | null;
+  /** The interviewer's last word → the first answer word on screen (ms). */
+  latencyMs: number | null;
+  /** Listening time (ms since the session started) when the interviewer stopped. */
+  askedAtMs: number;
+  createdAt: number;
+}
+
+/** What the copilot is doing about the interviewer's current turn (for a subtle indicator). */
+export type TurnPhase = 'idle' | 'listening' | 'thinking';
+
+export interface LiveTurnUpdate {
+  id: string;
+  phase: TurnPhase;
 }
 
 export const LiveStartSchema = z.strictObject({
@@ -146,8 +197,12 @@ export const LiveStartSchema = z.strictObject({
   knowledgeBaseId: z.string().max(64).nullable(),
   /** Tests can skip transcription to check levels only. */
   transcribe: z.boolean(),
+  /** Company and role being interviewed for; they help answers to "why us?" questions. */
+  company: z.string().trim().max(120).default(''),
+  role: z.string().trim().max(120).default(''),
 });
-export type LiveStartParams = z.infer<typeof LiveStartSchema>;
+/** Company and role may be left out (empty). */
+export type LiveStartParams = z.input<typeof LiveStartSchema>;
 
 export type SessionRecordStatus = 'live' | 'ended' | 'interrupted';
 
@@ -161,6 +216,8 @@ export interface SessionSummary {
   endedAt: number | null;
   durationMs: number;
   segmentCount: number;
+  /** Answers shown (Phase 4). */
+  answerCount: number;
 }
 
 export interface SessionAudioInfo {
@@ -175,12 +232,47 @@ export interface SessionStats {
   reconnects: number;
   /** Microphone segments dropped because they repeated the interviewer (echo). */
   echoDropped: number;
+  /** Turn detection counters (Phase 4); absent on older sessions. */
+  turns?: TurnStats;
+}
+
+export interface TurnStats {
+  /** Analyzer and answer requests started (each pause, transcript update or fallback). */
+  attempts: number;
+  /** Attempts cancelled: the interviewer kept talking or the analyzer said "wait". */
+  cancelled: number;
+  /** Questions answered (an answer was shown). */
+  answered: number;
+  /** Finished turns that needed no answer (statements, thanks, filler). */
+  ignored: number;
+  /** Answers shown on the "?" fast path and then taken back. */
+  withdrawn: number;
+}
+
+/** A question and the answer shown for it, as saved with the session. */
+export interface SessionAnswer {
+  id: string;
+  questionId: string;
+  question: string;
+  heard: string;
+  type: string | null;
+  source: AnswerSource;
+  trigger: AnswerTrigger;
+  length: AnswerLength;
+  model: string | null;
+  text: string;
+  status: LiveAnswerStatus;
+  latencyMs: number | null;
+  askedAtMs: number;
+  createdAt: number;
 }
 
 export interface SessionDetail extends SessionSummary {
   audio: SessionAudioInfo;
   stats: SessionStats | null;
   segments: TranscriptSegment[];
+  /** Answers shown during the interview, oldest first (withdrawn ones excluded). */
+  answers: SessionAnswer[];
 }
 
 export const TranscriptFormatSchema = z.enum(['markdown', 'text']);

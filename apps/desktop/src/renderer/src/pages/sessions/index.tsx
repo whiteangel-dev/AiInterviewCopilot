@@ -7,6 +7,7 @@ import {
   Loader2,
   Pencil,
   Radio,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -93,8 +94,14 @@ function SessionList() {
                     .join(' · ')}
                 </div>
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-right text-xs text-muted-foreground">
                 {s.segmentCount} line{s.segmentCount === 1 ? '' : 's'}
+                {s.answerCount > 0 && (
+                  <>
+                    <br />
+                    {s.answerCount} answer{s.answerCount === 1 ? '' : 's'}
+                  </>
+                )}
               </span>
             </button>
           </li>
@@ -111,6 +118,7 @@ function SessionView({ id }: { id: string }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [showAnswers, setShowAnswers] = useState(true);
 
   useEffect(() => {
     invoke('sessions:get', { id })
@@ -141,9 +149,15 @@ function SessionView({ id }: { id: string }) {
     }
   };
 
+  const withAnswers = showAnswers && session.answers.length > 0;
+
   const save = async (format: 'markdown' | 'text') => {
     try {
-      const { saved } = await invoke('sessions:saveTranscript', { id, format });
+      const { saved } = await invoke('sessions:saveTranscript', {
+        id,
+        format,
+        includeAnswers: withAnswers,
+      });
       if (saved) toast('success', 'Transcript saved.');
     } catch (err) {
       toast('error', errorMessage(err));
@@ -152,11 +166,24 @@ function SessionView({ id }: { id: string }) {
 
   const copy = async () => {
     try {
-      const text = session.segments
-        .map(
-          (s) =>
-            `[${formatClock(s.startMs)}] ${s.channel === 'interviewer' ? 'Interviewer' : 'You'}: ${s.text}`,
-        )
+      const lines = session.segments.map((s) => ({
+        at: s.startMs,
+        text: `[${formatClock(s.startMs)}] ${s.channel === 'interviewer' ? 'Interviewer' : 'You'}: ${s.text}`,
+      }));
+      if (withAnswers) {
+        for (const a of session.answers) {
+          lines.push({
+            at: a.askedAtMs + 1,
+            text: `    Suggested answer:\n${a.text
+              .split('\n')
+              .map((l) => `    ${l}`)
+              .join('\n')}`,
+          });
+        }
+      }
+      const text = lines
+        .sort((x, y) => x.at - y.at)
+        .map((l) => l.text)
         .join('\n');
       await invoke('app:copyText', text);
       toast('success', 'Transcript copied.');
@@ -227,6 +254,17 @@ function SessionView({ id }: { id: string }) {
             .join(' · ')}
           action={
             <div className="flex gap-2">
+              {session.answers.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setShowAnswers(!showAnswers)}
+                  aria-pressed={showAnswers}
+                  title="Show the answers the copilot suggested. Copy and Save include what's shown."
+                >
+                  <Sparkles aria-hidden /> {showAnswers ? 'Hide answers' : 'Show answers'}
+                </Button>
+              )}
               <Button size="sm" variant="secondary" onClick={() => void copy()}>
                 <ClipboardCopy aria-hidden /> Copy
               </Button>
@@ -256,6 +294,7 @@ function SessionView({ id }: { id: string }) {
           )}
           <TranscriptView
             segments={session.segments}
+            answers={withAnswers ? session.answers : []}
             className="max-h-[65vh] text-sm"
             emptyText="Nothing was transcribed in this session."
           />

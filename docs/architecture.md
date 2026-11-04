@@ -1,12 +1,14 @@
 # AI Interview Copilot — Architecture
 
-**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)); live listening built in Phase 3 ([summary](phase3/summary.md)), real-device capture still to be confirmed on a Windows PC. Individual decisions are recorded in [docs/adr/](adr/).
+**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)); live listening built in Phase 3 ([summary](phase3/summary.md)); live answers built in Phase 4 ([summary](phase4/summary.md)). Real-device capture and real interviews are still to be confirmed on a Windows PC. Individual decisions are recorded in [docs/adr/](adr/).
 
 A Windows-first (macOS later) desktop app. It listens to a live job interview, detects the interviewer's questions, and streams short, natural answers grounded in the candidate's resume and their own notes ("Application Knowledge"). English-only.
 
 ## 1. Priorities
 
-1. **Speed.** First answer words on screen within 1.5 s (median) of the interviewer's last word. Measured: 0.97 s median, 1.24 s at the 95th percentile.
+1. **Speed.** First answer words on screen within 1.5 s (median) of the interviewer's last word. Measured:
+   - Phase 0 prototype: 0.97 s median, 1.24 s at the 95th percentile;
+   - the app (Phase 4, three runs): 1.15–1.36 s median, 1.44–1.87 s at the 95th percentile. The model's time to first token varied that day; the app's own part is ~0.5 s.
 2. **Reliability during a live interview.** No crashes, automatic reconnection, graceful fallback.
 3. **Grounded answers.** Never invent experience; handle gaps honestly.
 4. **Low resource use.** Runs next to Zoom or Teams and a browser.
@@ -44,7 +46,7 @@ A Windows-first (macOS later) desktop app. It listens to a live job interview, d
 - **Main process** stays light; if it blocks, every window freezes.
 - **Engine** runs the whole live pipeline in an Electron `utilityProcess`. Heavy jobs (resume parsing, embeddings) run on worker threads.
 - **Renderers** are sandboxed, use `contextIsolation`, have no Node.js access and a strict CSP. The packaged UI loads from `app://renderer/`, not `file://`.
-- **Live events** (transcript, meters, state) go from the engine through main to both windows. A direct engine → renderer MessagePort remains an option if Phase 4's token streams need it ([ADR 0009](adr/0009-live-listening.md)).
+- **Live events** (transcript, meters, state, answers as they stream) go from the engine through main to both windows. A direct engine → renderer MessagePort remains an option, but answer streams didn't need it ([ADR 0009](adr/0009-live-listening.md), [ADR 0010](adr/0010-live-answers.md)).
 - **IPC:**
   - renderer → main uses one allowlisted `invoke` bridge; main checks the sender, validates every payload with Zod, and replies with a `Result` envelope that keeps error codes;
   - main ↔ engine uses a typed RPC (`@aic/ipc`) with timeouts and events;
@@ -70,8 +72,15 @@ You (microphone) ───────────┘   16 kHz mono  └► loca
    - If the interviewer resumes, cancel the attempt.
    - After 1.2 s of silence, ask the analyzer again with a "silent for over a second" hint.
 4. **Answer.** A streamed answer: an opening sentence the candidate can say right away, then 2–4 short bullets. Grounding rules, an honest "no experience" pattern, American conversational style. Length presets.
-5. **Memory.** The interview history is append-only and includes what the candidate actually said (mic transcript), so follow-ups stay consistent with it.
-6. **Manual override.** Hotkeys: "Answer now", regenerate, shorter / longer.
+5. **Memory.** The interview history is append-only and includes what the candidate actually said (mic transcript), so follow-ups stay consistent with it. An answered question with no transcribed reply gets a placeholder reply, so it isn't answered again.
+6. **Manual override.** "Answer now" (hotkey), regenerate (hotkey), shorter / longer, and an "Answer automatically" setting.
+7. **Answer bank first.** An approved prepared answer that confidently matches is shown as it is, with no model call.
+
+Built in Phase 4 as a tested state machine (`packages/core/src/live/turns.ts`). Turn boundaries:
+- a turn ends when it was answered, when the candidate spoke, or after a finished statement and a pause;
+- otherwise more speech extends it.
+
+Details: [ADR 0010](adr/0010-live-answers.md).
 
 ### Prompt layout (ordered for provider-side caching)
 
@@ -134,9 +143,9 @@ Built in Phase 2; details in [ADR 0008](adr/0008-preparation-pipeline.md).
 |---|---|
 | Profiles | `profiles`, `resume_documents`, `profile_versions` (immutable JSON + compiled brief) |
 | Knowledge | `knowledge_bases`, `knowledge_items` (fact/instruction), `knowledge_compilations` (snapshot) |
-| Search | `context_chunks` + FTS5 + sqlite-vec, if retrieval is needed (Phase 4; the whole brief and knowledge currently fit in the prompt) |
+| Search | `context_chunks` + FTS5 + sqlite-vec, if retrieval is needed (not yet: the whole brief and knowledge fit in the prompt) |
 | Answer bank | `prepared_answers` |
-| Sessions | `sessions` (pins the profile version; snapshot of the answer context and vocabulary), `transcript_segments` (final only). Phase 4: `questions`, `answers` (tokens, time to first token, model), `latency_events` |
+| Sessions | `sessions` (pins the profile version; snapshot of the answer context and vocabulary; turn counters), `transcript_segments` (final only), `session_questions`, `session_answers` (text, status, latency, time to first token, tokens, model, prompt version) |
 | Settings | `provider_configs` (key *reference* and last 4 characters only; cached model list), `app_settings` (one row per section) |
 
 IDs are UUIDv7. Deleting a profile or knowledge base removes everything under it, and `secure_delete` overwrites the freed pages. Sessions keep a snapshot of the context they used, so they survive changes to (or deletion of) the profile. "Delete my data" removes everything. The schema version is `PRAGMA user_version`. An existing database is backed up (still encrypted) before migrating, and a database from a newer app version is refused.
@@ -164,12 +173,10 @@ packages/core/       engine logic without Electron: AI providers, model roles, l
 packages/db/         schema, generated migrations (drizzle/), repositories
 packages/prompts/    versioned prompts, model output schemas, brief and knowledge compilers, vocabulary
 packages/native-audio/  Rust (napi-rs) WASAPI capture module; built into apps/desktop/resources/native/
+evals/               opt-in evaluations with real Gemini: turn analyzer, the whole live pipeline, model roles
 docs/                architecture, ADRs, phase reports, release process
-spikes/              Phase 0 benchmarks and the native audio module (kept as reference)
+spikes/              Phase 0 benchmarks and fixtures (kept as reference)
 ```
-
-Still to come:
-- `evals/`: Phase 4.
 
 ## 10. Roadmap
 
@@ -179,8 +186,8 @@ Still to come:
 | 1 | Electron app foundation, monorepo, encrypted database, keychain, settings, CI with Windows builds | **Done** ([summary](phase1/summary.md)); signing waits for a certificate |
 | 2 | Resume import and extraction, Application Knowledge, answer bank | **Done** ([summary](phase2/summary.md)) |
 | 3 | Audio capture on real devices, live transcription, copilot window, hotkeys | **Done** ([summary](phase3/summary.md)); real-device capture to confirm on a Windows PC |
-| 4 | Turn detection + answer generation (**Windows MVP**) | Next |
-| 5 | Speed and quality hardening: fact check, echo cancellation, provider failover | |
+| 4 | Turn detection + answer generation (**Windows MVP**) | **Done** ([summary](phase4/summary.md)); real-interview tuning on a Windows PC |
+| 5 | Speed and quality hardening: fact check, echo cancellation, provider failover, cost per interview hour | Next |
 | 6 | Windows commercial release: onboarding, updates, licensing, privacy | |
 | 7 | macOS | |
 | 8 | Practice mode, offline mode, analytics | |

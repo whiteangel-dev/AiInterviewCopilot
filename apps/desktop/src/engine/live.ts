@@ -19,13 +19,13 @@ import {
   type LiveMeter,
   type LiveMode,
   type LiveState,
-  type LiveSuggestion,
   type LiveTranscript,
   type LiveTranscriptUpdate,
   type SessionStats,
   type TranscriptSegment,
 } from '@aic/ipc';
 import type { AudioSources, RunningSource, SourceStatus } from './audio-sources';
+import type { CopilotHooks } from './copilot';
 
 /** Meter and health checks run at this interval. */
 const TICK_MS = 1000 / ECHO_TICKS_PER_SECOND;
@@ -45,7 +45,6 @@ export interface LiveRunEvents {
   state(state: LiveState): void;
   meter(meter: LiveMeter): void;
   transcript(update: LiveTranscriptUpdate): void;
-  suggestion(suggestion: LiveSuggestion | null): void;
 }
 
 export interface LiveRunOptions {
@@ -60,8 +59,8 @@ export interface LiveRunOptions {
   /** Interview sessions save final segments; returns the stored segment ID. */
   saveSegment: ((segment: Omit<TranscriptSegment, 'id'>) => string) | null;
   checkpoint: ((durationMs: number, stats: SessionStats) => void) | null;
-  /** Matches the interviewer's words against the answer bank. */
-  suggest: ((heard: string) => Omit<LiveSuggestion, 'id' | 'at'> | null) | null;
+  /** Live answers (interviews): gets voice activity, transcript and ticks. */
+  copilot: ((clock: { now(): number; sessionMs(): number }) => CopilotHooks) | null;
   events: LiveRunEvents;
   log: Logger;
   now?: () => number;
@@ -93,7 +92,7 @@ const OFF: ChannelStatus = { capture: 'off', stt: 'off', source: null, error: nu
 
 /**
  * One live run: capture → level meter and voice detection → live transcription
- * → transcript (saved for interviews) and answer-bank suggestions. Also an
+ * → transcript (saved for interviews) and live answers (the copilot). Also an
  * audio test, which saves nothing.
  */
 export class LiveRun {
@@ -110,8 +109,8 @@ export class LiveRun {
   #startedAtMono = 0;
   #lastCheckpoint = 0;
   #echoDropped = 0;
-  #lastSuggestion: string | null = null;
   #interimCount = 0;
+  readonly copilot: CopilotHooks | null;
   #sttStats = { audioSeconds: { interviewer: 0, candidate: 0 }, reconnects: 0 };
 
   constructor(private readonly options: LiveRunOptions) {
@@ -137,6 +136,8 @@ export class LiveRun {
       warnings: [...options.sources.warnings],
       error: null,
     };
+    this.copilot =
+      options.copilot?.({ now: () => this.#now(), sessionMs: () => this.activeMs() }) ?? null;
   }
 
   #newChannel(name: AudioChannel): Channel {
@@ -195,6 +196,7 @@ export class LiveRun {
 
   pause(): void {
     if (this.#state.status !== 'live') return;
+    this.copilot?.pause();
     this.#halt();
     this.#state.status = 'paused';
     this.#emitState();
@@ -202,6 +204,7 @@ export class LiveRun {
 
   resume(): void {
     if (this.#state.status !== 'paused') return;
+    this.copilot?.resume();
     this.#resume();
     this.#state.status = 'live';
     this.#emitState();
@@ -210,6 +213,7 @@ export class LiveRun {
   stop(): void {
     if (this.finished) return;
     this.#state.status = 'stopping';
+    this.copilot?.stop();
     this.#halt();
     clearInterval(this.#tick);
     this.#state.status = 'ended';
@@ -238,6 +242,7 @@ export class LiveRun {
       },
       reconnects: this.#sttStats.reconnects,
       echoDropped: this.#echoDropped,
+      ...(this.copilot ? { turns: { ...this.copilot.stats } } : {}),
     };
   }
 
@@ -346,6 +351,7 @@ export class LiveRun {
       const t = this.activeMs();
       if (c.vad.speaking) c.speechStartMs = Math.max(0, t - 60);
       else c.speechEndMs = Math.max(0, t - 300);
+      this.copilot?.speech(c.name, c.vad.speaking);
     }
     c.stt?.write(pcm, c.vad.speaking);
   }
@@ -387,6 +393,7 @@ export class LiveRun {
     c.interim.endMs = now;
     c.interimAt = this.#now();
     this.options.events.transcript({ id: this.id, kind: 'interim', segment: { ...c.interim } });
+    this.copilot?.interim(c.name, c.interim);
   }
 
   #onFinal(c: Channel, raw: string) {
@@ -422,7 +429,7 @@ export class LiveRun {
     }
     this.#segments.push(segment);
     this.options.events.transcript({ id: this.id, kind: 'final', segment });
-    if (c.name === 'interviewer') this.#maybeSuggest();
+    this.copilot?.final(c.name, segment);
   }
 
   #isEcho(text: string, startMs: number): boolean {
@@ -434,27 +441,6 @@ export class LiveRun {
       }
     }
     return false;
-  }
-
-  /** The interviewer's words since the candidate last spoke (up to 3 segments). */
-  #currentQuestion(): string {
-    const parts: string[] = [];
-    for (let i = this.#segments.length - 1; i >= 0 && parts.length < 3; i--) {
-      const s = this.#segments[i]!;
-      if (s.channel === 'candidate') break;
-      parts.unshift(s.text);
-    }
-    return parts.join(' ');
-  }
-
-  #maybeSuggest() {
-    if (!this.options.suggest) return;
-    const heard = this.#currentQuestion();
-    if (!heard) return;
-    const match = this.options.suggest(heard);
-    if (!match || match.answer.id === this.#lastSuggestion) return;
-    this.#lastSuggestion = match.answer.id;
-    this.options.events.suggestion({ ...match, id: this.id, at: Date.now() });
   }
 
   // ── Ticks: meter, echo, health ────────────────────────────────────────────
@@ -495,6 +481,7 @@ export class LiveRun {
       if (c.interim && now - c.interimAt > STALE_INTERIM_MS) this.#onFinal(c, c.interim.text);
     }
     this.options.events.meter({ id: this.id, levels });
+    this.copilot?.tick();
 
     if (this.#echo.push(avg.interviewer, avg.candidate, this.#channels.interviewer.vad.speaking)) {
       this.#state.echoSuspected = this.#echo.suspected;

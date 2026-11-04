@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { release } from 'node:os';
 import { FakeSttProvider, GeminiLiveStt, matchHeard, type SttProvider } from '@aic/core';
-import type { SessionListRow, SessionRow } from '@aic/db';
+import type { SessionAnswerWithQuestion, SessionListRow, SessionRow } from '@aic/db';
 import {
   AUDIO_CHANNELS,
   AppError,
@@ -13,6 +13,7 @@ import {
   type LiveStartParams,
   type PreparedAnswer,
   type RpcHandlers,
+  type SessionAnswer,
   type SessionDetail,
   type SessionSummary,
   type TranscriptFormat,
@@ -28,6 +29,7 @@ import {
   type PortLike,
 } from './audio-sources';
 import type { EngineContext } from './context';
+import { LiveCopilot } from './copilot';
 import { LiveRun, assertNotRunning } from './live';
 import { loadNativeAudio } from './native-audio';
 
@@ -42,6 +44,9 @@ type SessionMethods = Pick<
   | 'live.transcript'
   | 'live.diagnostics'
   | 'capture.failed'
+  | 'live.answers'
+  | 'live.answerNow'
+  | 'live.regenerate'
   | 'sessions.list'
   | 'sessions.get'
   | 'sessions.rename'
@@ -62,7 +67,9 @@ export interface SessionModule {
   shutdown(): void;
 }
 
-const toSummary = (row: SessionRow & { segmentCount: number }): SessionSummary => ({
+const toSummary = (
+  row: SessionRow & { segmentCount: number; answerCount: number },
+): SessionSummary => ({
   id: row.id,
   title: row.title,
   status: row.status,
@@ -72,6 +79,24 @@ const toSummary = (row: SessionRow & { segmentCount: number }): SessionSummary =
   endedAt: row.endedAt,
   durationMs: row.durationMs,
   segmentCount: row.segmentCount,
+  answerCount: row.answerCount,
+});
+
+const toSessionAnswer = (row: SessionAnswerWithQuestion): SessionAnswer => ({
+  id: row.id,
+  questionId: row.questionId,
+  question: row.question.question,
+  heard: row.question.heard,
+  type: row.question.type,
+  source: row.source,
+  trigger: row.trigger,
+  length: row.length,
+  model: row.model,
+  text: row.text,
+  status: row.status,
+  latencyMs: row.latencyMs,
+  askedAtMs: row.question.askedAtMs,
+  createdAt: row.createdAt,
 });
 
 export function formatClock(ms: number): string {
@@ -85,6 +110,7 @@ export function formatClock(ms: number): string {
 export function exportTranscript(
   session: SessionDetail,
   format: TranscriptFormat,
+  includeAnswers = false,
 ): { fileName: string; text: string } {
   const who = (c: AudioChannel) => (c === 'interviewer' ? 'Interviewer' : 'You');
   const date = new Date(session.startedAt);
@@ -102,18 +128,48 @@ export function exportTranscript(
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 60) || 'interview';
-  if (format === 'markdown') {
-    const lines = session.segments.map(
-      (s) => `**${who(s.channel)}** (${formatClock(s.startMs)}): ${s.text}`,
-    );
+
+  // Transcript lines and (optionally) the answers shown, in time order. An
+  // answer goes after the interviewer's question, before the candidate's reply.
+  type Entry = { at: number; order: number; line: string };
+  const entries: Entry[] = [];
+  const markdown = format === 'markdown';
+  session.segments.forEach((s, i) =>
+    entries.push({
+      at: s.startMs,
+      order: i,
+      line: markdown
+        ? `**${who(s.channel)}** (${formatClock(s.startMs)}): ${s.text}`
+        : `[${formatClock(s.startMs)}] ${who(s.channel)}: ${s.text}`,
+    }),
+  );
+  if (includeAnswers) {
+    session.answers.forEach((a, i) => {
+      const body = a.text.trim() || (a.status === 'error' ? '(failed)' : '(empty)');
+      const label = a.source === 'bank' ? 'Suggested answer (answer bank)' : 'Suggested answer';
+      entries.push({
+        at: a.askedAtMs + 1,
+        order: session.segments.length + i,
+        line: markdown
+          ? `> **${label}**\n${body
+              .split('\n')
+              .map((l) => `> ${l}`)
+              .join('\n')}`
+          : `    ${label}:\n${body
+              .split('\n')
+              .map((l) => `    ${l}`)
+              .join('\n')}`,
+      });
+    });
+  }
+  entries.sort((x, y) => x.at - y.at || x.order - y.order);
+  const lines = entries.map((e) => e.line);
+  if (markdown) {
     return {
       fileName: `${slug}-${day}.md`,
       text: `# ${session.title}\n\n${meta.join(' · ')}\n\n${lines.join('\n\n')}\n`,
     };
   }
-  const lines = session.segments.map(
-    (s) => `[${formatClock(s.startMs)}] ${who(s.channel)}: ${s.text}`,
-  );
   return {
     fileName: `${slug}-${day}.txt`,
     text: `${session.title}\n${meta.join(' | ')}\n\n${lines.join('\n')}\n`,
@@ -183,11 +239,13 @@ export function sessionModule(ctx: EngineContext): SessionModule {
       startMs: s.startMs,
       endMs: s.endMs,
     }));
+    const answers = r.answers(id).map(toSessionAnswer);
     return {
-      ...toSummary({ ...row, segmentCount: segments.length }),
+      ...toSummary({ ...row, segmentCount: segments.length, answerCount: answers.length }),
       audio: row.audio,
       stats: row.stats,
       segments,
+      answers,
     };
   };
 
@@ -248,35 +306,36 @@ export function sessionModule(ctx: EngineContext): SessionModule {
       throw new AppError('not_found', 'That knowledge base no longer exists.');
     }
     const items = base ? s.knowledge.items(base.id) : [];
-    const vocabulary = buildVocabulary(version?.data ?? null, items);
+    const company = params.company?.trim() ?? '';
+    const role = params.role?.trim() ?? '';
+    const vocabulary = buildVocabulary(version?.data ?? null, items, company ? [company] : []);
     const context = buildSessionContext({
       today: ctx.today(),
+      company: company || null,
+      role: role || null,
       brief: version?.brief ?? null,
       knowledge: compileKnowledge(items),
     }).text;
 
-    const answers: PreparedAnswer[] = params.profileId
-      ? s.answers.list(params.profileId).map(toAnswer)
+    // Only approved answers are shown as they are; anything else is written live.
+    const approved: PreparedAnswer[] = params.profileId
+      ? s.answers
+          .list(params.profileId)
+          .map(toAnswer)
+          .filter((a) => a.status === 'approved')
       : [];
-    const approved = answers.filter((a) => a.status === 'approved');
-    const drafts = answers.filter((a) => a.status === 'draft');
-    const suggest =
-      params.mode === 'interview' && answers.length > 0
-        ? (heard: string) => {
-            // Approved answers first; a draft only if no approved answer fits.
-            const match = matchHeard(heard, approved) ?? matchHeard(heard, drafts);
-            return match ? { heard, answer: match.item, score: match.score } : null;
-          }
-        : null;
 
     browser = null;
     // The capture window (built-in capture) has its own ID, separate from the session's.
     const sources = createSources(randomUUID());
-    const title =
+    const title = (
       params.title ||
       (params.mode === 'test'
         ? 'Audio test'
-        : `Interview${base ? ` · ${base.name}` : ''}`.slice(0, 120));
+        : company || role
+          ? [company, role].filter(Boolean).join(' · ')
+          : `Interview${base ? ` · ${base.name}` : ''}`)
+    ).slice(0, 120);
 
     let sessionId = `test-${randomUUID()}`;
     if (params.mode === 'interview') {
@@ -321,16 +380,44 @@ export function sessionModule(ctx: EngineContext): SessionModule {
               });
             }
           : null,
-      suggest,
+      copilot:
+        params.mode === 'interview' && transcribe
+          ? (clock) =>
+              new LiveCopilot({
+                runId: id,
+                provider: ctx.ready().providers.gemini,
+                apiKey,
+                settings: { models: settings.models, answers: settings.answers },
+                context,
+                bank: (heard) => {
+                  const match = matchHeard(heard, approved);
+                  return match
+                    ? {
+                        preparedAnswerId: match.item.id,
+                        question: match.item.question,
+                        text: match.item.answer,
+                      }
+                    : null;
+                },
+                save: {
+                  question: (row) => repo().saveQuestion(row),
+                  answer: (row) => repo().saveAnswer(row),
+                },
+                emit: {
+                  answer: (answer) => ctx.emit('live.answer', answer),
+                  turn: (update) => ctx.emit('live.turn', update),
+                },
+                log: ctx.log().child('copilot'),
+                ...clock,
+              })
+          : null,
       events: {
         state: (state) => ctx.emit('live.state', state),
         meter: (meter) => ctx.emit('live.meter', meter),
         transcript: (update) => ctx.emit('live.transcript', update),
-        suggestion: (suggestion) => ctx.emit('live.suggestion', suggestion),
       },
       log: ctx.log().child(params.mode === 'test' ? 'audio-test' : 'session'),
     });
-    ctx.emit('live.suggestion', null);
     run.start();
     ctx.log().info('live run started', {
       mode: params.mode,
@@ -338,9 +425,18 @@ export function sessionModule(ctx: EngineContext): SessionModule {
       transcribe,
       channels: transcribeChannels,
       vocabulary: vocabulary.length,
-      answers: answers.length,
+      bankAnswers: approved.length,
+      autoAnswer: settings.answers.autoAnswer,
+      answerMode: settings.answers.mode,
     });
     return run.state;
+  };
+
+  const activeCopilot = (): LiveCopilot => {
+    if (!run || run.finished || !(run.copilot instanceof LiveCopilot)) {
+      throw new AppError('invalid_input', 'Start an interview first.');
+    }
+    return run.copilot;
   };
 
   const stop = () => {
@@ -406,6 +502,21 @@ export function sessionModule(ctx: EngineContext): SessionModule {
     'capture.failed': ({ runId, message }) => {
       if (browser?.runId === runId) browser.fail(message);
     },
+    'live.answers': () => (run?.copilot instanceof LiveCopilot ? run.copilot.answers() : []),
+    'live.answerNow': () => {
+      const copilot = activeCopilot();
+      if (!copilot.turns.answerNow()) {
+        throw new AppError(
+          'invalid_input',
+          "There's nothing to answer yet. The interviewer hasn't asked anything.",
+        );
+      }
+    },
+    'live.regenerate': ({ answerId, length }) => {
+      if (!activeCopilot().turns.regenerate(answerId, length)) {
+        throw new AppError('not_found', 'That answer is no longer available.');
+      }
+    },
 
     'sessions.list': () =>
       repo()
@@ -415,7 +526,11 @@ export function sessionModule(ctx: EngineContext): SessionModule {
     'sessions.rename': ({ id, title }) => {
       const row = repo().update(id, { title });
       if (!row) throw new AppError('not_found', 'That session no longer exists.');
-      return toSummary({ ...row, segmentCount: repo().segmentCount(id) });
+      return toSummary({
+        ...row,
+        segmentCount: repo().segmentCount(id),
+        answerCount: repo().answerCount(id),
+      });
     },
     'sessions.delete': ({ id }) => {
       if (run && run.id === id && !run.finished) {
@@ -423,7 +538,8 @@ export function sessionModule(ctx: EngineContext): SessionModule {
       }
       repo().delete(id);
     },
-    'sessions.export': ({ id, format }) => exportTranscript(detail(id), format),
+    'sessions.export': ({ id, format, includeAnswers }) =>
+      exportTranscript(detail(id), format, includeAnswers),
   };
 
   return {
@@ -438,6 +554,7 @@ export function sessionModule(ctx: EngineContext): SessionModule {
     onReady() {
       const interrupted = repo().markInterrupted();
       if (interrupted > 0) ctx.log().warn('sessions interrupted by a crash', { interrupted });
+      repo().stopStreamingAnswers();
       purge();
       clearInterval(purgeTimer);
       purgeTimer = setInterval(

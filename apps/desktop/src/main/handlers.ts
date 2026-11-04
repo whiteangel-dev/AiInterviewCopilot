@@ -136,8 +136,12 @@ export function createInvokeHandlers({
 
     'models:list': (params) => host.call('models.list', params, PROVIDER_CALL),
 
-    'sessions:saveTranscript': async ({ id, format }) => {
-      const { fileName, text } = await host.call('sessions.export', { id, format });
+    'sessions:saveTranscript': async ({ id, format, includeAnswers }) => {
+      const { fileName, text } = await host.call('sessions.export', {
+        id,
+        format,
+        includeAnswers,
+      });
       const options = {
         title: 'Save transcript',
         defaultPath: join(app.getPath('documents'), fileName),

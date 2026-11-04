@@ -1,4 +1,5 @@
 import type { LiveState } from '@aic/ipc';
+import { formatAccelerator } from '@aic/ipc/hotkeys';
 import {
   ArrowRight,
   Eye,
@@ -11,8 +12,8 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { useState } from 'react';
+import { AnswerCard } from '../../components/live/answer-card';
 import { LevelMeter } from '../../components/live/level-meter';
-import { SuggestionCard } from '../../components/live/suggestion-card';
 import { TranscriptView } from '../../components/live/transcript-view';
 import { LiveWarnings } from '../../components/live/warnings';
 import { Page } from '../../components/page';
@@ -39,6 +40,8 @@ function SetupCard() {
   const start = useLive((s) => s.start);
   const testRunning = useLive((s) => s.state?.mode === 'test' && isActive(s.state));
   const [title, setTitle] = useState('');
+  const [company, setCompany] = useState('');
+  const [role, setRole] = useState('');
   const [profileChoice, setProfileId] = useState<string | null>(null);
   const [baseChoice, setBaseId] = useState<string | null>(null);
   // Until the user picks, default to the first profile and knowledge base (they may load later).
@@ -54,6 +57,8 @@ function SetupCard() {
       await start({
         mode: 'interview',
         title: title.trim(),
+        company: company.trim(),
+        role: role.trim(),
         profileId: profileId === NONE ? null : profileId,
         knowledgeBaseId: baseId === NONE ? null : baseId,
         transcribe: true,
@@ -70,15 +75,41 @@ function SetupCard() {
       <CardHeader
         icon={<Radio />}
         title="New interview"
-        description="The copilot transcribes both sides and shows matching answers from your answer bank."
+        description="The copilot transcribes both sides, notices when the interviewer asks a question, and suggests an answer from your own experience."
       />
       <CardBody>
-        <Field label="Title" description="For your session history, e.g. the company and round.">
+        <Field
+          label="Company"
+          description="Helps with questions like “Why do you want to work here?”"
+        >
+          <Input
+            className="w-64"
+            value={company}
+            maxLength={120}
+            placeholder="Acme"
+            onChange={(e) => setCompany(e.target.value)}
+            aria-label="Company"
+          />
+        </Field>
+        <Field label="Role">
+          <Input
+            className="w-64"
+            value={role}
+            maxLength={120}
+            placeholder="Senior Backend Engineer"
+            onChange={(e) => setRole(e.target.value)}
+            aria-label="Role"
+          />
+        </Field>
+        <Field
+          label="Title"
+          description="For your session history. Leave empty to use the company and role."
+        >
           <Input
             className="w-64"
             value={title}
             maxLength={120}
-            placeholder="Acme, backend engineer, round 2"
+            placeholder="Acme, round 2"
             onChange={(e) => setTitle(e.target.value)}
             aria-label="Interview title"
           />
@@ -184,14 +215,19 @@ function LiveView({ state }: { state: LiveState }) {
     meter,
     segments,
     interim,
-    suggestion,
+    answers,
+    phase,
     pause,
     resume,
     stop,
+    answerNow,
+    regenerate,
     copilotVisible,
     setCopilotVisible,
   } = useLive();
   const toast = useApp((s) => s.toast);
+  const answerKey = useApp((s) => s.settings?.hotkeys.answerNow);
+  const platform = useApp((s) => s.info?.platform ?? 'win32');
   const elapsed = useElapsed(state);
   const [stopping, setStopping] = useState(false);
   const act = (fn: () => Promise<void>) => () =>
@@ -268,11 +304,19 @@ function LiveView({ state }: { state: LiveState }) {
           />
         </div>
         <LiveWarnings warnings={state.warnings} />
-        {suggestion && <SuggestionCard suggestion={suggestion} />}
+        <AnswerCard
+          answers={answers}
+          phase={phase}
+          live={live}
+          answerNowHint={answerKey ? formatAccelerator(answerKey, platform) : null}
+          onAnswerNow={act(answerNow)}
+          onRegenerate={(id, length) => act(() => regenerate(id, length))()}
+          className="h-[min(40vh,360px)] text-sm"
+        />
         <TranscriptView
           segments={segments}
           interim={interim}
-          className="h-[min(50vh,520px)] rounded-lg border border-border p-4 text-sm"
+          className="h-[min(40vh,420px)] rounded-lg border border-border p-4 text-sm"
           emptyText={live ? 'Listening… The transcript appears as people talk.' : 'Paused.'}
         />
       </CardBody>
@@ -287,7 +331,7 @@ export function InterviewPage() {
   return (
     <Page
       title="Interview"
-      description="A live transcript of both sides, with matching answers from your answer bank."
+      description="A live transcript of both sides, and an answer whenever the interviewer asks a question."
     >
       {active && interview ? (
         <LiveView state={interview} />

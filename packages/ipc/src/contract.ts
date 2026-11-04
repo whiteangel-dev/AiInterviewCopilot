@@ -7,13 +7,14 @@ import type { HotkeyStatus } from './hotkeys';
 import {
   LiveStartSchema,
   TranscriptFormatSchema,
+  type LiveAnswer,
   type LiveMeter,
   type LiveState,
-  type LiveSuggestion,
   type LiveTranscriptUpdate,
+  type LiveTurnUpdate,
 } from './live';
 import { CandidateProfileSchema, type JobProgress } from './profile';
-import { SettingsPatchSchema, type Settings } from './settings';
+import { AnswerLengthSchema, SettingsPatchSchema, type Settings } from './settings';
 import {
   ProviderIdSchema,
   type ApiKeyStatus,
@@ -122,11 +123,21 @@ export const invokeContract = {
   'live:state': NoInput,
   'live:transcript': NoInput,
   'live:diagnostics': NoInput,
+  'live:answers': NoInput,
+  'live:answerNow': NoInput,
+  'live:regenerate': z.strictObject({
+    answerId: z.string().min(1).max(64).nullable(),
+    length: AnswerLengthSchema.nullable(),
+  }),
   'sessions:list': NoInput,
   'sessions:get': ById,
   'sessions:rename': z.strictObject({ id: Id, title: z.string().trim().min(1).max(120) }),
   'sessions:delete': ById,
-  'sessions:saveTranscript': z.strictObject({ id: Id, format: TranscriptFormatSchema }),
+  'sessions:saveTranscript': z.strictObject({
+    id: Id,
+    format: TranscriptFormatSchema,
+    includeAnswers: z.boolean(),
+  }),
   'app:copyText': z.string().max(500_000),
   'copilot:setVisible': z.strictObject({ visible: z.boolean() }),
   'copilot:getVisible': NoInput,
@@ -173,6 +184,9 @@ export const FORWARDED_CHANNELS = {
   'live:state': 'live.state',
   'live:transcript': 'live.transcript',
   'live:diagnostics': 'live.diagnostics',
+  'live:answers': 'live.answers',
+  'live:answerNow': 'live.answerNow',
+  'live:regenerate': 'live.regenerate',
   'sessions:list': 'sessions.list',
   'sessions:get': 'sessions.get',
   'sessions:rename': 'sessions.rename',
@@ -226,7 +240,8 @@ export interface EventPayloads {
   'live:state': LiveState | null;
   'live:meter': LiveMeter;
   'live:transcript': LiveTranscriptUpdate;
-  'live:suggestion': LiveSuggestion | null;
+  'live:answer': LiveAnswer;
+  'live:turn': LiveTurnUpdate;
   'copilot:visibility': boolean;
   'hotkeys:status': HotkeyStatus[];
 }

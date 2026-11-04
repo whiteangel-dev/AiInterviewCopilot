@@ -1,6 +1,11 @@
 /** Global shortcuts. Zod-free so the renderer can import it. */
 
-export const HOTKEY_ACTIONS = ['toggleCopilot', 'pauseListening'] as const;
+export const HOTKEY_ACTIONS = [
+  'toggleCopilot',
+  'pauseListening',
+  'answerNow',
+  'regenerate',
+] as const;
 export type HotkeyAction = (typeof HOTKEY_ACTIONS)[number];
 
 export interface HotkeyStatus {
