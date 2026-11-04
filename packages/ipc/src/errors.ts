@@ -33,12 +33,19 @@ export class AppError extends Error {
   readonly code: ErrorCode;
   /** A temporary failure (server error, network blip) worth retrying. Not serialized. */
   readonly retryable: boolean;
+  /** The model can't be used with this key (e.g. not on the free tier); another model may work. */
+  readonly modelUnavailable: boolean;
 
-  constructor(code: ErrorCode, message: string, options?: ErrorOptions & { retryable?: boolean }) {
+  constructor(
+    code: ErrorCode,
+    message: string,
+    options?: ErrorOptions & { retryable?: boolean; modelUnavailable?: boolean },
+  ) {
     super(message, options);
     this.name = 'AppError';
     this.code = code;
     this.retryable = options?.retryable ?? false;
+    this.modelUnavailable = options?.modelUnavailable ?? false;
   }
 
   toJSON(): SerializedError {

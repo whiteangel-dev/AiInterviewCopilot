@@ -1,6 +1,7 @@
 import { AppError } from '@aic/ipc';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { forgetUnavailableModels, isModelUnavailable } from '../providers/availability';
 import { FakeProvider } from '../providers/fake';
 import type { AiProvider, StructuredResponse } from '../providers/types';
 import { generateObject, toModelSchema } from './generate-object';
@@ -79,6 +80,40 @@ describe('generateObject', () => {
 
     calls = -10; // always failing
     await expect(generateObject(flaky, request, { retryDelaysMs: [1, 1] })).rejects.toBe(fail);
+  });
+
+  it('switches to a fallback model the key can use, and remembers', async () => {
+    forgetUnavailableModels();
+    const asked: string[] = [];
+    const freeKey: AiProvider = {
+      ...stub([]),
+      generateStructured: (req) => {
+        asked.push(req.model);
+        return req.model === 'pro'
+          ? Promise.reject(
+              new AppError('quota', 'Not on the free tier.', { modelUnavailable: true }),
+            )
+          : Promise.resolve({
+              text: '{"name":"F","age":2}',
+              model: req.model,
+              inputTokens: 1,
+              outputTokens: 1,
+              durationMs: 1,
+            });
+      },
+    };
+    const r = await generateObject(
+      freeKey,
+      { ...request, model: 'pro' },
+      { fallbackModels: ['flash'] },
+    );
+    expect(r.data.name).toBe('F');
+    expect(r.response.model).toBe('flash');
+    expect(isModelUnavailable('pro')).toBe(true);
+    // Next time it goes straight to the fallback.
+    await generateObject(freeKey, { ...request, model: 'pro' }, { fallbackModels: ['flash'] });
+    expect(asked).toEqual(['pro', 'flash', 'flash']);
+    forgetUnavailableModels();
   });
 
   it('does not retry permanent failures', async () => {

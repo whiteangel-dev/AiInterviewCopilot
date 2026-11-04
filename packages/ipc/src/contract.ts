@@ -21,6 +21,7 @@ import {
   type AppInfo,
   type EngineStatus,
   type ModelCatalog,
+  type UpdateStatus,
 } from './types';
 
 /** Hosts the renderer may ask the main process to open in the default browser. */
@@ -55,6 +56,9 @@ export const invokeContract = {
   'app:openPath': z.enum(['userData', 'logs']),
   'app:openExternal': ExternalUrlSchema,
   'app:deleteAllData': z.strictObject({ confirm: z.literal('DELETE') }),
+  'app:updateStatus': NoInput,
+  'app:checkForUpdates': NoInput,
+  'app:installUpdate': NoInput,
   'engine:getStatus': NoInput,
   'settings:get': NoInput,
   'settings:update': SettingsPatchSchema,
@@ -213,6 +217,9 @@ export interface InvokeOutputs extends ForwardedOutputs {
   'app:openPath': void;
   'app:openExternal': void;
   'app:deleteAllData': void;
+  'app:updateStatus': UpdateStatus;
+  'app:checkForUpdates': UpdateStatus;
+  'app:installUpdate': void;
   'engine:getStatus': EngineStatus;
   'settings:get': Settings;
   'settings:update': Settings;
@@ -244,6 +251,7 @@ export interface EventPayloads {
   'live:turn': LiveTurnUpdate;
   'copilot:visibility': boolean;
   'hotkeys:status': HotkeyStatus[];
+  'app:update': UpdateStatus;
 }
 
 // Each forwarded channel's validated input must be what its engine method takes.

@@ -1,4 +1,5 @@
 import { AppError } from '@aic/ipc';
+import { markModelUnavailable, usableModels } from '../providers/availability';
 import type { AiProvider, TextStreamRequest, TextStreamResponse } from '../providers/types';
 
 /**
@@ -35,7 +36,7 @@ export interface HedgedResponse extends TextStreamResponse {
 
 /** Failures another request (or another model) may not have. */
 export function isRetryableLiveError(err: AppError): boolean {
-  if (err.code === 'quota' || err.code === 'network') return true;
+  if (err.code === 'quota' || err.code === 'network' || err.modelUnavailable) return true;
   if (err.code !== 'provider_error') return false;
   return (
     err.retryable ||
@@ -67,7 +68,8 @@ export function streamHedged(
     const legs: Leg[] = [];
     const startedAt = performance.now();
     let firstTextAt: number | null = null;
-    const fallbacks = options.fallbackModels.filter((m) => m !== request.model);
+    // Models this key can't use (e.g. Pro on a free key) are skipped from the start.
+    const [first, ...fallbacks] = usableModels([request.model, ...options.fallbackModels]);
     let winner: Leg | null = null;
     let settled = false;
     let firstError: AppError | null = null;
@@ -89,8 +91,9 @@ export function streamHedged(
 
     const running = () => legs.some((l) => !l.done && !l.controller.signal.aborted);
 
-    const fail = (err: AppError) => {
+    const fail = (model: string, err: AppError) => {
       failures++;
+      if (err.modelUnavailable) markModelUnavailable(model);
       firstError ??= err;
       const next = isRetryableLiveError(err) ? fallbacks.shift() : undefined;
       if (next) start(next, 'fallback');
@@ -135,6 +138,7 @@ export function streamHedged(
               );
             } else if (!winner) {
               fail(
+                model,
                 new AppError('provider_error', 'The model returned no text.', { retryable: true }),
               );
             }
@@ -145,16 +149,16 @@ export function streamHedged(
             if (settled || leg.controller.signal.aborted) return;
             const appError = provider.toAppError(err);
             if (winner === leg) finish(() => reject(appError));
-            else fail(appError);
+            else fail(model, appError);
           },
         );
     };
 
-    start(request.model, 'primary');
+    start(first!, first === request.model ? 'primary' : 'fallback');
     if (options.hedgeAfterMs !== null) {
       hedgeTimer = setTimeout(() => {
         // Not after a failure: the same model just failed.
-        if (!winner && !settled && failures === 0) start(request.model, 'hedge');
+        if (!winner && !settled && failures === 0) start(first!, 'hedge');
       }, options.hedgeAfterMs);
     }
   });

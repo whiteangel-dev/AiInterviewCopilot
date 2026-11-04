@@ -60,6 +60,18 @@ export interface AppInfo {
   secureStorage: SecureStorageLevel;
 }
 
+/**
+ * Automatic updates from GitHub Releases. `disabled` in development builds;
+ * `ready`: downloaded, installs on restart (or the next time the app quits).
+ */
+export type UpdateStatus =
+  | { state: 'disabled'; reason: string }
+  | { state: 'idle'; checkedAt: number | null }
+  | { state: 'checking' }
+  | { state: 'downloading'; version: string; percent: number }
+  | { state: 'ready'; version: string }
+  | { state: 'error'; message: string };
+
 export type EngineState = 'starting' | 'ready' | 'restarting' | 'failed';
 
 export interface EngineStatus {

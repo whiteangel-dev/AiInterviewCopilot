@@ -23,3 +23,4 @@ export * from './live/hedge';
 export * from './providers/metered';
 export * from './pricing';
 export * from './audio/aec';
+export * from './providers/availability';

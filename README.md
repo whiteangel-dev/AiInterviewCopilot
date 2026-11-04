@@ -1,6 +1,32 @@
 # AI Interview Copilot
 
-A desktop app (Windows first, macOS later) that listens to a live job interview and streams short, natural answers grounded in your resume and your own notes.
+A Windows app that listens to your job interview and, about a second after each question, suggests what to say: an opening line and a few short points, based only on your own resume and notes.
+
+## Download
+
+**[Download for Windows 10 and 11](https://github.com/whiteangel-dev/AiInterviewCopilot/releases/latest)**: get `AI-Interview-Copilot-Setup-….exe` under **Assets**, and run it. No admin rights needed.
+
+- **If Windows says "Windows protected your PC":** click **More info → Run anyway**. The app isn't code-signed yet.
+- **Updates** download by themselves. The app asks you to restart, and never restarts during an interview.
+
+## Get started
+
+1. **Connect Gemini (free).** On the Home page:
+   - click **Get a free key**;
+   - in Google AI Studio, click **Create API key** and copy it;
+   - paste it back in the app and click **Connect**.
+2. **Add your resume.** Go to **Profiles → Import resume** (PDF or Word), and check what it found.
+3. **Optional:**
+   - **Knowledge**: add what's not on your resume (project stories, salary expectations, the company you're applying to);
+   - **Answer bank**: prepare answers to common questions ahead of time.
+4. **Check your audio.** Go to **Audio → Start test**, then talk and play a video: both meters should move. Headphones work best.
+5. **Start your interview.** Go to **Interview**, enter the company and role, and click **Start listening**. Answers appear in the small copilot window next to your call.
+   - `Ctrl+Alt+Space` shows or hides it.
+   - `Ctrl+Alt+Enter` answers right away.
+
+**Your data:** your resume, notes and transcripts stay on your computer, and no audio is saved.
+
+**Free keys:** everything the copilot does live works on Google's free tier, within its usage limits. A key with billing on is faster to prepare (it uses Google's strongest model) and has higher limits: about $0.57 per interview hour, estimated.
 
 ## Status
 
@@ -12,15 +38,17 @@ A desktop app (Windows first, macOS later) that listens to a live job interview 
 | 3 | Live listening: audio capture, live transcription, copilot window, sessions, hotkeys | Done ([summary](docs/phase3/summary.md)); real-device test pending |
 | 4 | Live answers: turn detection, streamed answers, answer bank first, Answer now / regenerate | Done ([summary](docs/phase4/summary.md)); **~1.2 s median** from last word to first answer word with real Gemini |
 | 5 | Hardening: duplicate and backup requests, fact check, echo cancellation, speech-only transcription, cost per session | Done ([summary](docs/phase5/summary.md)); about **$0.57 per interview hour** on your key (estimated) |
-| 6 | Windows commercial release: onboarding, updates, licensing, privacy | Next |
+| 6 | Windows release: public downloads, automatic updates, first-run setup, free keys | Done ([summary](docs/phase6/summary.md)) |
 
-## Docs
+## For developers
+
+### Docs
 
 - [Architecture](docs/architecture.md)
 - [Decision records](docs/adr/)
 - [Building and releasing](docs/release.md)
 
-## Repository
+### Repository
 
 | Path | What |
 |---|---|
@@ -34,7 +62,7 @@ A desktop app (Windows first, macOS later) that listens to a live job interview 
 | `spikes/` | Phase 0 benchmarks, fixtures and the Electron capture spike |
 | `docs/` | Architecture, ADRs, phase reports, release process |
 
-## Development
+### Development
 
 Requires Node.js 24+. On Linux, Electron needs a desktop session or `xvfb-run`.
 

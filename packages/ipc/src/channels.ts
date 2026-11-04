@@ -7,6 +7,9 @@ export const INVOKE_CHANNELS = [
   'app:openPath',
   'app:openExternal',
   'app:deleteAllData',
+  'app:updateStatus',
+  'app:checkForUpdates',
+  'app:installUpdate',
   'engine:getStatus',
   'settings:get',
   'settings:update',
@@ -80,6 +83,7 @@ export const EVENT_CHANNELS = [
   'live:turn',
   'copilot:visibility',
   'hotkeys:status',
+  'app:update',
 ] as const;
 
 export type EventChannel = (typeof EVENT_CHANNELS)[number];

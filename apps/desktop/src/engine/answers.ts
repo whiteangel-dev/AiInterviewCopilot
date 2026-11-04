@@ -8,7 +8,7 @@ import {
   clip,
   compileKnowledge,
 } from '@aic/prompts';
-import type { EngineContext } from './context';
+import { PREPARATION_FALLBACK, type EngineContext } from './context';
 
 type AnswerMethods = Pick<
   RpcHandlers<EngineMethods>,
@@ -57,26 +57,30 @@ export function answerHandlers(ctx: EngineContext): AnswerMethods {
         const existing = repo().list(profileId);
         const model = s.settings.models.preparation;
         job.progress('writing', `Writing answers with ${model}. This can take up to a minute.`);
-        const result = await generateObject(s.providers.gemini, {
-          apiKey: ctx.requireKey('gemini'),
-          model,
-          system: answerBankSystem(s.settings.answers.length),
-          parts: [
-            {
-              text: answerBankInput({
-                today: ctx.today(),
-                brief: profile.brief,
-                knowledge,
-                existing: existing.map((a) => a.question),
-                roleSpecificCount: ROLE_SPECIFIC_COUNT,
-              }),
-            },
-          ],
-          schema: AnswerBankSchema,
-          task: 'answer_bank',
-          effort: 'low',
-          signal: job.signal,
-        });
+        const result = await generateObject(
+          s.providers.gemini,
+          {
+            apiKey: ctx.requireKey('gemini'),
+            model,
+            system: answerBankSystem(s.settings.answers.length),
+            parts: [
+              {
+                text: answerBankInput({
+                  today: ctx.today(),
+                  brief: profile.brief,
+                  knowledge,
+                  existing: existing.map((a) => a.question),
+                  roleSpecificCount: ROLE_SPECIFIC_COUNT,
+                }),
+              },
+            ],
+            schema: AnswerBankSchema,
+            task: 'answer_bank',
+            effort: 'low',
+            signal: job.signal,
+          },
+          PREPARATION_FALLBACK,
+        );
 
         const accepted: typeof result.data.answers = [];
         for (const a of result.data.answers) {

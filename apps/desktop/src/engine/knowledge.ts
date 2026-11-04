@@ -21,7 +21,7 @@ import {
   compileKnowledge,
   knowledgeAnalysisInput,
 } from '@aic/prompts';
-import type { EngineContext } from './context';
+import { PREPARATION_FALLBACK, type EngineContext } from './context';
 
 type KnowledgeMethods = Pick<
   RpcHandlers<EngineMethods>,
@@ -167,29 +167,33 @@ export function knowledgeHandlers(ctx: EngineContext): KnowledgeMethods {
         const refs = new Map(items.map((item, i) => [`k${i + 1}`, item]));
         const model = s.settings.models.preparation;
         job.progress('analyzing', `Reviewing ${items.length} notes with ${model}…`);
-        const result = await generateObject(s.providers.gemini, {
-          apiKey: ctx.requireKey('gemini'),
-          model,
-          system: KNOWLEDGE_ANALYSIS_SYSTEM,
-          parts: [
-            {
-              text: knowledgeAnalysisInput(
-                [...refs].map(([ref, i]) => ({
-                  ref,
-                  kind: i.kind,
-                  category: i.category,
-                  title: i.title,
-                  content: i.content,
-                })),
-                brief,
-              ),
-            },
-          ],
-          schema: KnowledgeAnalysisSchema,
-          task: 'knowledge_analysis',
-          effort: 'low',
-          signal: job.signal,
-        });
+        const result = await generateObject(
+          s.providers.gemini,
+          {
+            apiKey: ctx.requireKey('gemini'),
+            model,
+            system: KNOWLEDGE_ANALYSIS_SYSTEM,
+            parts: [
+              {
+                text: knowledgeAnalysisInput(
+                  [...refs].map(([ref, i]) => ({
+                    ref,
+                    kind: i.kind,
+                    category: i.category,
+                    title: i.title,
+                    content: i.content,
+                  })),
+                  brief,
+                ),
+              },
+            ],
+            schema: KnowledgeAnalysisSchema,
+            task: 'knowledge_analysis',
+            effort: 'low',
+            signal: job.signal,
+          },
+          PREPARATION_FALLBACK,
+        );
         const idOf = (ref: string) => refs.get(ref.trim().replace(/^\[|\]$/g, ''))?.id;
         const issues = result.data.issues
           .map((issue) => ({
@@ -225,16 +229,20 @@ export function knowledgeHandlers(ctx: EngineContext): KnowledgeMethods {
         const s = ctx.ready();
         const model = s.settings.models.preparation;
         job.progress('analyzing', `Organizing your notes with ${model}…`);
-        const result = await generateObject(s.providers.gemini, {
-          apiKey: ctx.requireKey('gemini'),
-          model,
-          system: KNOWLEDGE_SPLIT_SYSTEM,
-          parts: [{ text: `NOTES\n${text}` }],
-          schema: KnowledgeSplitSchema,
-          task: 'knowledge_split',
-          effort: 'low',
-          signal: job.signal,
-        });
+        const result = await generateObject(
+          s.providers.gemini,
+          {
+            apiKey: ctx.requireKey('gemini'),
+            model,
+            system: KNOWLEDGE_SPLIT_SYSTEM,
+            parts: [{ text: `NOTES\n${text}` }],
+            schema: KnowledgeSplitSchema,
+            task: 'knowledge_split',
+            effort: 'low',
+            signal: job.signal,
+          },
+          PREPARATION_FALLBACK,
+        );
         return result.data.items
           .filter((i) => i.content.trim())
           .slice(0, 200)

@@ -1,7 +1,7 @@
 {
   "name": "@aic/desktop",
   "productName": "AI Interview Copilot",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Real-time interview answer suggestions grounded in your resume.",
   "author": "AI Interview Copilot",
@@ -18,7 +18,8 @@
     "icon": "electron scripts/render-icon.mjs"
   },
   "dependencies": {
-    "better-sqlite3-multiple-ciphers": "^13.0.3"
+    "better-sqlite3-multiple-ciphers": "^13.0.3",
+    "electron-updater": "^6.8.11"
   },
   "devDependencies": {
     "@aic/core": "*",

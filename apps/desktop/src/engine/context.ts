@@ -1,4 +1,4 @@
-import type { AiProvider, Logger } from '@aic/core';
+import { FREE_PREPARATION_MODEL, type AiProvider, type Logger } from '@aic/core';
 import type {
   AnswerRepository,
   AppDatabase,
@@ -35,3 +35,9 @@ export interface EngineContext {
   /** Today's date as YYYY-MM-DD (injectable for tests). */
   today(): string;
 }
+
+/**
+ * Preparation uses the strongest model, which Google's free tier doesn't
+ * include: free keys fall back to a free model instead of failing.
+ */
+export const PREPARATION_FALLBACK = { fallbackModels: [FREE_PREPARATION_MODEL] } as const;

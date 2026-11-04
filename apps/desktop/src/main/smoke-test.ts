@@ -16,6 +16,8 @@ export async function runSmokeTest(ctx: {
   window: BrowserWindow;
   host: EngineHost;
   secrets: SecretStore;
+  /** The auto-updater module loaded (it must ship inside the app). */
+  updaterLoaded: boolean;
   log: Logger;
 }): Promise<void> {
   const { window, host, secrets, log } = ctx;
@@ -67,6 +69,7 @@ export async function runSmokeTest(ctx: {
       nativeSources: audio.native.sources,
       audioBackend: audio.backend,
       audioDevices: audio.devices.length,
+      updaterLoaded: ctx.updaterLoaded,
     });
   } catch (err) {
     clearTimeout(timer);

@@ -35,7 +35,9 @@ test('first run: setup steps, engine ready, encrypted database', async () => {
     await expect(page.getByTestId('engine-state')).toHaveAttribute('data-state', 'ready');
     const steps = page.getByTestId('setup-steps');
     await expect(steps.getByText('0 of 5 done')).toBeVisible();
-    await expect(steps.getByRole('button', { name: 'Add API key' })).toBeVisible();
+    // The key step is right there: a link to get a free key and a box to paste it.
+    await expect(steps.getByTestId('quick-key')).toBeVisible();
+    await expect(steps.getByRole('button', { name: /Get a free key/ })).toBeVisible();
     await screenshot(page, 'home-first-run');
 
     const header = readFileSync(join(userData, 'data', 'app.db')).subarray(0, 16);
@@ -45,10 +47,28 @@ test('first run: setup steps, engine ready, encrypted database', async () => {
   }
 });
 
+test('first run: connect Gemini right from the home page', async () => {
+  const { app, page } = await launch(userData);
+  try {
+    const steps = page.getByTestId('setup-steps');
+    const quick = steps.getByTestId('quick-key');
+    await quick.getByLabel('Gemini API key').fill(INVALID_KEY);
+    await quick.getByRole('button', { name: 'Connect' }).click();
+    await expect(quick.getByRole('alert')).toContainText('rejected');
+    await quick.getByLabel('Gemini API key').fill(VALID_KEY);
+    await quick.getByRole('button', { name: 'Connect' }).click();
+    await expect(steps.getByText('1 of 5 done')).toBeVisible();
+    await expect(steps.getByText(/Connected with the key ending in abcd/)).toBeVisible();
+    await expect(steps.getByTestId('quick-key')).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
 test('API key: rejects a bad key, saves a good one, survives restart, never stored in plaintext', async () => {
   let { app, page } = await launch(userData);
   try {
-    await page.getByRole('button', { name: 'Add API key' }).click();
+    await openSettings(page);
     const card = page.getByTestId('api-key-card');
     await expect(card.getByText('Not set')).toBeVisible();
 

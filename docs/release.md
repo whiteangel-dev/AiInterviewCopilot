@@ -21,7 +21,7 @@ Every push to `main` builds the native audio module and the installer on `window
 - smoke-tests the unpacked app;
 - installs the app silently and smoke-tests the installed copy. The smoke test fails if the native audio module doesn't load.
 
-The installer is uploaded as the `windows-installer` artifact of the run.
+The installer is uploaded as the `windows-installer` artifact of the run (for testing; users download releases instead, see below).
 
 ## Smoke test
 
@@ -50,7 +50,35 @@ Unsigned installers trigger a Windows SmartScreen warning. Signing needs one of 
    - The CI job already passes them to electron-builder as `CSC_LINK` / `CSC_KEY_PASSWORD`.
    - Signing happens automatically when they're set.
 
-Auto-update (electron-updater with GitHub Releases) is planned for Phase 6. `publish` is already set to this repository.
+## Releasing a version
+
+1. Set the new version in `apps/desktop/package.json` (and the root `package.json`), then commit it to `main`.
+2. Tag the commit and push the tag:
+   ```
+   git tag v1.0.1
+   git push origin v1.0.1
+   ```
+3. The `release` workflow (`.github/workflows/release.yml`) then:
+   - checks that the tag matches the version;
+   - runs the unit tests;
+   - builds the native audio module and the installer;
+   - uploads the installer, its `.blockmap` and `latest.yml` to a **draft** GitHub Release;
+   - installs the app and smoke-tests it.
+4. When the workflow has passed, open the draft on GitHub, add release notes, and click **Publish release**:
+   - the download link in the README (`/releases/latest`) points to it;
+   - installed apps find it within about four hours, or at their next start.
+
+Don't publish a draft whose workflow failed.
+
+## Automatic updates
+
+Installed Windows builds use `electron-updater` with GitHub Releases (`publish` in `electron-builder.yml`).
+
+- **Checking:** 15 s after start, then every 4 hours.
+- **Downloading:** in the background.
+- **Installing:** "Restart to update" appears in the sidebar and in Settings → About. Otherwise the update installs the next time the app quits. The app never restarts itself, and refuses to while an interview runs.
+- **Turned off:** in development builds, smoke tests, and with `AIC_DISABLE_UPDATES=1`.
+- **Signing:** unsigned builds update without signature checks. Once signing is set up, electron-updater also checks that an update is signed by the same publisher.
 
 ## Development-only switches
 
@@ -62,3 +90,4 @@ These are ignored in packaged builds:
 | `AIC_FAKE_PROVIDER=1` | Offline fake Gemini: keys containing `INVALID` are rejected, `OFFLINE` fails like a network error |
 | `AIC_PASSWORD_STORE=basic` | Linux: skip the OS keyring |
 | `AIC_LIVE_TESTS=1` | Run the live Gemini tests, using the key in `.env.local` |
+| `AIC_DISABLE_UPDATES=1` | No automatic update checks (also honored by packaged builds) |

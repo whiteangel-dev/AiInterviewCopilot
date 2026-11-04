@@ -23,6 +23,19 @@ describe('GeminiProvider.toAppError', () => {
     expect(provider.toAppError(apiError(400, 'Invalid argument')).code).toBe('provider_error');
   });
 
+  it('recognizes a model that is not on the free tier', () => {
+    const freeTier = provider.toAppError(
+      apiError(
+        429,
+        'You exceeded your current quota. * Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-3.1-pro',
+      ),
+    );
+    expect(freeTier).toMatchObject({ code: 'quota', modelUnavailable: true });
+    expect(freeTier.message).toMatch(/free tier/);
+    expect(provider.toAppError(apiError(429, 'RESOURCE_EXHAUSTED')).modelUnavailable).toBe(false);
+    expect(provider.toAppError(apiError(404, 'models/x is not found')).modelUnavailable).toBe(true);
+  });
+
   it('maps network failures', () => {
     const err = new TypeError('fetch failed', {
       cause: Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' }),

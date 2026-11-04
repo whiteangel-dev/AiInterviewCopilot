@@ -2,6 +2,7 @@ import { AppError } from '@aic/ipc';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeProvider } from '../providers/fake';
 import type { AiProvider, TextStreamRequest, TextStreamResponse } from '../providers/types';
+import { forgetUnavailableModels } from '../providers/availability';
 import { HedgeTimer, isRetryableLiveError, streamHedged } from './hedge';
 
 interface Call {
@@ -136,6 +137,38 @@ describe('streamHedged', () => {
     calls[1]!.text('From backup');
     calls[1]!.done();
     await expect(p).resolves.toMatchObject({ model: 'backup', failedOver: true, requests: 2 });
+  });
+
+  it('skips a model the key turned out not to have', async () => {
+    forgetUnavailableModels();
+    const { provider, calls } = scripted();
+    const first = streamHedged(
+      provider,
+      base(() => undefined),
+      {
+        hedgeAfterMs: null,
+        fallbackModels: ['backup'],
+      },
+    );
+    calls[0]!.fail(new AppError('quota', 'Not on the free tier.', { modelUnavailable: true }));
+    await flush();
+    calls[1]!.text('ok');
+    calls[1]!.done();
+    await first;
+    // The next request starts on the backup.
+    const second = streamHedged(
+      provider,
+      base(() => undefined),
+      {
+        hedgeAfterMs: null,
+        fallbackModels: ['backup'],
+      },
+    );
+    expect(calls[2]!.req.model).toBe('backup');
+    calls[2]!.text('ok');
+    calls[2]!.done();
+    await expect(second).resolves.toMatchObject({ failedOver: true });
+    forgetUnavailableModels();
   });
 
   it('reports the error when nothing is left to try', async () => {

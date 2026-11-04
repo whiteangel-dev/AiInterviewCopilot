@@ -10,7 +10,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { isActive, useLive } from '../live-store';
-import { cn } from '../lib/utils';
+import { invoke } from '../lib/api';
+import { useUpdate } from '../lib/use-update';
+import { cn, errorMessage } from '../lib/utils';
 import { useApp, type Page } from '../store';
 import { Logo } from './logo';
 
@@ -37,6 +39,8 @@ export function Sidebar() {
   const navigate = useApp((s) => s.navigate);
   const engine = useApp((s) => s.engine);
   const version = useApp((s) => s.info?.version);
+  const toast = useApp((s) => s.toast);
+  const update = useUpdate();
   const label = ENGINE_LABEL[engine?.state ?? 'starting'];
   const live = useLive((s) => s.state);
   const liveInterview = live?.mode === 'interview' && isActive(live);
@@ -90,7 +94,25 @@ export function Sidebar() {
           <span className={cn('size-2 rounded-full', label.dot)} aria-hidden />
           {label.text}
         </span>
-        {version && <span>v{version}</span>}
+        {update?.state === 'ready' ? (
+          <button
+            type="button"
+            className="rounded px-1.5 py-0.5 font-medium text-primary hover:bg-accent"
+            title={`Version ${update.version} is ready`}
+            data-testid="update-ready"
+            onClick={() =>
+              void invoke('app:installUpdate').catch((err: unknown) =>
+                toast('error', errorMessage(err)),
+              )
+            }
+          >
+            Restart to update
+          </button>
+        ) : update?.state === 'downloading' ? (
+          <span title={`Downloading version ${update.version}`}>Updating… {update.percent}%</span>
+        ) : (
+          version && <span>v{version}</span>
+        )}
       </div>
     </aside>
   );

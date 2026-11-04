@@ -26,4 +26,5 @@ if ($result.secureStorage -ne 'os') { throw "Expected OS secure storage, got $($
 # The native audio module must load from app.asar.unpacked (hosted runners have no audio devices).
 if (-not $result.nativeAudio) { throw "Native audio module did not load: $($result.nativeAudioError)" }
 if (-not ($result.nativeSources -contains 'microphone')) { throw 'Native audio module lacks WASAPI sources' }
+if (-not $result.updaterLoaded) { throw 'The auto-updater module is missing from the app' }
 Write-Host "Smoke test passed in $($result.elapsedMs) ms"

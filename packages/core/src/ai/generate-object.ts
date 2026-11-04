@@ -1,5 +1,6 @@
 import { AppError } from '@aic/ipc';
 import { z } from 'zod';
+import { markModelUnavailable, usableModels } from '../providers/availability';
 import type { AiProvider, StructuredRequest, StructuredResponse } from '../providers/types';
 
 /**
@@ -40,20 +41,32 @@ function sleep(ms: number, signal: AbortSignal | undefined): Promise<void> {
 export async function generateObject<S extends z.ZodType>(
   provider: AiProvider,
   request: Omit<StructuredRequest, 'schema'> & { schema: S },
-  options: { retryDelaysMs?: readonly number[] } = {},
+  options: {
+    retryDelaysMs?: readonly number[];
+    /** Models to switch to if the key can't use `request.model` (e.g. a free key and Pro). */
+    fallbackModels?: readonly string[];
+  } = {},
 ): Promise<GeneratedObject<z.output<S>>> {
   const jsonSchema = toModelSchema(request.schema);
   const delays = options.retryDelaysMs ?? RETRY_DELAYS_MS;
+  const models = usableModels([request.model, ...(options.fallbackModels ?? [])]);
   let lastError = '';
   let transientRetries = 0;
   for (let attempt = 1; attempt <= 2; attempt++) {
     if (request.signal?.aborted) throw new AppError('cancelled', 'Cancelled.');
     let response: StructuredResponse;
+    const model = models[0]!;
     try {
-      response = await provider.generateStructured({ ...request, schema: jsonSchema });
+      response = await provider.generateStructured({ ...request, model, schema: jsonSchema });
     } catch (err) {
       if (request.signal?.aborted) throw new AppError('cancelled', 'Cancelled.');
       const error = provider.toAppError(err);
+      if (error.modelUnavailable && models.length > 1) {
+        markModelUnavailable(model);
+        models.shift();
+        attempt--; // another model, not another try of the same reply
+        continue;
+      }
       const delay = delays[transientRetries];
       if (error.retryable && delay !== undefined) {
         transientRetries++;

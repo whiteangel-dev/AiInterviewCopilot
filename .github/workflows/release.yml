@@ -1,0 +1,62 @@
+name: release
+
+# Push a tag like v1.0.0 (matching apps/desktop/package.json) to build the
+# Windows installer and upload it to a *draft* GitHub Release. Publish the
+# draft on GitHub to make it the download everyone gets, and the update the
+# installed apps pick up. See docs/release.md.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows installer → draft release
+    runs-on: windows-latest
+    env:
+      # Signing is skipped while these are unset (no certificate yet). See docs/release.md.
+      CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      # electron-builder uploads to the release with this token.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - name: The tag matches the app version
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne '${{ github.ref_name }}') {
+            throw "Tag ${{ github.ref_name }} doesn't match the app version $version"
+          }
+      - run: npm ci
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/native-audio
+      - name: Native audio module (WASAPI)
+        run: npm run build -w @aic/native-audio
+      - run: npm test
+      - run: npm run build
+      - name: Build the installer and upload it to a draft release
+        working-directory: apps/desktop
+        run: npx electron-builder --win --publish always
+      - name: Smoke test (installed app)
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem apps/desktop/dist -Filter 'AI-Interview-Copilot-Setup-*.exe' | Select-Object -First 1
+          $p = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Installer exited with $($p.ExitCode)" }
+          $exe = Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter 'AI Interview Copilot.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'Installed app not found' }
+          ./scripts/ci/smoke-windows.ps1 -Exe $exe.FullName -Report smoke-installed.json

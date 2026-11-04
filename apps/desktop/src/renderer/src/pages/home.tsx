@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Page } from '../components/page';
+import { QuickKey } from '../components/quick-key';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card, CardBody, CardHeader } from '../components/ui/card';
@@ -27,6 +28,8 @@ interface Step {
   description: ReactNode;
   done: boolean;
   action?: ReactNode;
+  /** Shown under the step (e.g. the key form). */
+  detail?: ReactNode;
   upcoming?: boolean;
 }
 
@@ -47,13 +50,11 @@ export function HomePage() {
       title: 'Connect Gemini',
       description: connected
         ? `Connected with the key ending in ${apiKey?.hint ?? '····'}.`
-        : 'Add your Google Gemini API key. It powers transcription and answers.',
+        : apiKey?.configured
+          ? (apiKey.message ?? 'Google rejected the saved key. Paste a new one.')
+          : 'A free Google Gemini API key powers transcription and answers. It takes about a minute.',
       done: connected,
-      action: !connected && (
-        <Button size="sm" onClick={() => navigate('settings', { section: 'api-key' })}>
-          {apiKey?.configured ? 'Fix API key' : 'Add API key'} <ArrowRight aria-hidden />
-        </Button>
-      ),
+      detail: !connected && <QuickKey />,
     },
     {
       icon: FileText,
@@ -154,7 +155,7 @@ export function HomePage() {
             {steps.map((step) => (
               <li
                 key={step.title}
-                className="flex items-center gap-4 border-t border-border py-4 first:border-t-0 first:pt-1"
+                className="flex items-start gap-4 border-t border-border py-4 first:border-t-0 first:pt-1"
               >
                 <div
                   className={cn(
@@ -174,8 +175,9 @@ export function HomePage() {
                     {step.upcoming && <Badge>Coming soon</Badge>}
                   </div>
                   <p className="mt-0.5 text-[13px] text-muted-foreground">{step.description}</p>
+                  {step.detail}
                 </div>
-                {step.action}
+                {step.action && <div className="self-center">{step.action}</div>}
               </li>
             ))}
           </ol>

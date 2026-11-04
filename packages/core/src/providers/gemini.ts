@@ -236,6 +236,14 @@ export class GeminiProvider implements AiProvider {
         );
       }
       if (err.status === 429) {
+        // Google's free tier gives some models (Pro) a quota of zero.
+        if (/limit: ?0\b|free[_ ]tier/i.test(detail)) {
+          return new AppError(
+            'quota',
+            "This model isn't included in your key's free tier. Choose another one in Settings → Models, or turn on billing in Google AI Studio.",
+            { cause: err, modelUnavailable: true },
+          );
+        }
         return new AppError(
           'quota',
           'This key has hit its rate limit or quota. Wait a minute and try again, or check your plan in Google AI Studio.',
@@ -245,7 +253,7 @@ export class GeminiProvider implements AiProvider {
         return new AppError(
           'provider_error',
           "The selected model isn't available to this key. Choose another one in Settings → Models.",
-          { cause: err },
+          { cause: err, modelUnavailable: true },
         );
       }
       if (err.status === 400) {

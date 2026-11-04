@@ -18,6 +18,7 @@ import type { Hotkeys } from './hotkeys';
 import { broadcast, type InvokeHandlers } from './ipc';
 import type { AppPaths } from './paths';
 import type { SecretStore } from './secret-store';
+import type { Updates } from './updater';
 
 interface Context {
   host: EngineHost;
@@ -26,6 +27,7 @@ interface Context {
   log: Logger;
   copilot: CopilotWindow;
   hotkeys: Hotkeys;
+  updates: Updates;
   /** Parent for dialogs. */
   mainWindow: () => BrowserWindow | null;
 }
@@ -56,6 +58,7 @@ export function createInvokeHandlers({
   log,
   copilot,
   hotkeys,
+  updates,
   mainWindow,
 }: Context): InvokeHandlers {
   return {
@@ -173,5 +176,8 @@ export function createInvokeHandlers({
     'copilot:getVisible': () => copilot.visible,
 
     'hotkeys:status': () => hotkeys.statuses,
+    'app:updateStatus': () => updates.status,
+    'app:checkForUpdates': () => updates.check(),
+    'app:installUpdate': () => updates.install(),
   };
 }

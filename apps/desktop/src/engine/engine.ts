@@ -3,6 +3,7 @@ import {
   FakeProvider,
   GeminiProvider,
   createLogger,
+  forgetUnavailableModels,
   recommendModels,
   registerSecret,
   unregisterSecret,
@@ -204,6 +205,8 @@ export function createEngine(deps: EngineDeps): {
       const s = ready();
       const previous = keys.get(provider);
       if (previous && previous !== key) unregisterSecret(previous);
+      // Another key may have other models (a paid key has Pro, a free one doesn't).
+      if (previous !== key) forgetUnavailableModels();
       keys.set(provider, key);
       registerSecret(key);
 
@@ -238,6 +241,7 @@ export function createEngine(deps: EngineDeps): {
       const key = keys.get(provider);
       if (key) unregisterSecret(key);
       keys.delete(provider);
+      forgetUnavailableModels();
       s.providerRepo.clearKey(provider);
       return changed(provider);
     },

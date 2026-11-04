@@ -27,7 +27,7 @@ import {
   resumeExtractionSystem,
   toCandidateProfile,
 } from '@aic/prompts';
-import type { EngineContext } from './context';
+import { PREPARATION_FALLBACK, type EngineContext } from './context';
 import type { JobContext } from './jobs';
 
 type ProfileMethods = Pick<
@@ -105,16 +105,20 @@ export function profileHandlers(ctx: EngineContext): ProfileMethods {
       'analyzing',
       `Reading your resume with ${model}. This usually takes 20–40 seconds.`,
     );
-    const result = await generateObject(s.providers.gemini, {
-      apiKey: ctx.requireKey('gemini'),
-      model,
-      system: resumeExtractionSystem(ctx.today()),
-      parts,
-      schema: ResumeExtractionSchema,
-      task: 'resume_extraction',
-      effort: 'low',
-      signal: job.signal,
-    });
+    const result = await generateObject(
+      s.providers.gemini,
+      {
+        apiKey: ctx.requireKey('gemini'),
+        model,
+        system: resumeExtractionSystem(ctx.today()),
+        parts,
+        schema: ResumeExtractionSchema,
+        task: 'resume_extraction',
+        effort: 'low',
+        signal: job.signal,
+      },
+      PREPARATION_FALLBACK,
+    );
     job.progress('checking', 'Checking every statement against your resume…');
     const index = doc.textQuality === 'none' ? null : buildQuoteIndex(doc.text);
     const profile = toCandidateProfile(

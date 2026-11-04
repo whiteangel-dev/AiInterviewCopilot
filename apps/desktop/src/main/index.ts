@@ -31,6 +31,8 @@ import { SecretStore, type Cipher } from './secret-store';
 import { hardenWebContents, isTrustedUrl, trustedOrigins } from './security';
 import { runSmokeTest } from './smoke-test';
 import { applyTheme, cacheTheme, readCachedTheme } from './theme';
+import type * as ElectronUpdater from 'electron-updater';
+import { Updates, type UpdaterLike } from './updater';
 
 // ── Before ready ────────────────────────────────────────────────────────────
 // Development and test overrides; ignored in packaged builds.
@@ -246,8 +248,12 @@ async function main(): Promise<void> {
     broadcast('settings:changed', settings);
   });
   let shownFor: string | null = null;
+  let liveRunning = false;
   host.events.on('live.state', (state) => {
     broadcast('live:state', state);
+    liveRunning =
+      !!state &&
+      (state.status === 'starting' || state.status === 'live' || state.status === 'paused');
     if (state?.mode === 'interview' && state.status === 'live' && shownFor !== state.id) {
       shownFor = state.id;
       if (currentSettings?.copilot.showOnStart ?? true) copilot.show();
@@ -259,6 +265,36 @@ async function main(): Promise<void> {
   host.events.on('live.turn', (update) => broadcast('live:turn', update));
   host.events.on('capture.open', (request) => capture.open(request));
   host.events.on('capture.close', ({ runId }) => capture.close(runId));
+
+  // Automatic updates: installed Windows builds only (not development, tests or smoke tests).
+  const smokeTest = process.env.AIC_SMOKE_TEST === '1';
+  const updatesWanted =
+    app.isPackaged && process.platform === 'win32' && process.env.AIC_DISABLE_UPDATES !== '1';
+  let updater: UpdaterLike | null = null;
+  let updaterLoaded = false;
+  if (app.isPackaged) {
+    try {
+      // Loaded lazily; the smoke test checks it ships with the app.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require('electron-updater') as typeof ElectronUpdater;
+      updaterLoaded = true;
+      if (updatesWanted && !smokeTest) updater = mod.autoUpdater;
+    } catch (err) {
+      log.error('the updater could not be loaded', { err });
+    }
+  }
+  const updates = new Updates({
+    updater,
+    disabledReason: !app.isPackaged
+      ? 'Updates are off in development builds.'
+      : process.platform !== 'win32'
+        ? 'Automatic updates are available on Windows.'
+        : 'Updates are off.',
+    busy: () => liveRunning,
+    onStatus: (status) => broadcast('app:update', status),
+    log: log.child('updates'),
+  });
+  updates.start();
 
   const isTrustedSender = (event: IpcMainInvokeEvent): boolean => {
     const frame = event.senderFrame;
@@ -272,6 +308,7 @@ async function main(): Promise<void> {
       log: log.child('ipc'),
       copilot,
       hotkeys,
+      updates,
       mainWindow: () => mainWindow,
     }),
     isTrustedSender,
@@ -298,7 +335,13 @@ async function main(): Promise<void> {
   });
 
   if (process.env.AIC_SMOKE_TEST === '1') {
-    void runSmokeTest({ window: mainWindow, host, secrets, log: log.child('smoke') });
+    void runSmokeTest({
+      window: mainWindow,
+      host,
+      secrets,
+      updaterLoaded,
+      log: log.child('smoke'),
+    });
   }
 
   app.on('window-all-closed', () => app.quit());

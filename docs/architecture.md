@@ -1,6 +1,6 @@
 # AI Interview Copilot — Architecture
 
-**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)); live listening built in Phase 3 ([summary](phase3/summary.md)); live answers built in Phase 4 ([summary](phase4/summary.md)); hardening built in Phase 5 ([summary](phase5/summary.md)). Real-device capture, real interviews and real speakers are still to be confirmed on a Windows PC. Individual decisions are recorded in [docs/adr/](adr/).
+**Status:** approved 2026-11-03; speed targets validated in Phase 0 ([results](phase0/results.md)); app foundation built in Phase 1 ([summary](phase1/summary.md)); preparation pipeline built in Phase 2 ([summary](phase2/summary.md)); live listening built in Phase 3 ([summary](phase3/summary.md)); live answers built in Phase 4 ([summary](phase4/summary.md)); hardening built in Phase 5 ([summary](phase5/summary.md)); public downloads, automatic updates and free-key support built in Phase 6 ([summary](phase6/summary.md)). Real-device capture, real interviews and real speakers are still to be confirmed on a Windows PC. Individual decisions are recorded in [docs/adr/](adr/).
 
 A Windows-first (macOS later) desktop app. It listens to a live job interview, detects the interviewer's questions, and streams short, natural answers grounded in the candidate's resume and their own notes ("Application Knowledge"). English-only.
 
@@ -19,7 +19,7 @@ A Windows-first (macOS later) desktop app. It listens to a live job interview, d
 
 | Layer | Choice |
 |---|---|
-| Desktop shell | Electron (pinned to a supported major), electron-vite, electron-builder (NSIS installer, auto-update) |
+| Desktop shell | Electron (pinned to a supported major), electron-vite, electron-builder (NSIS installer), electron-updater (GitHub Releases) |
 | UI | React + TypeScript + Vite, Tailwind CSS, shadcn/ui, Zustand |
 | Core logic | TypeScript in `packages/core`, with no Electron imports (testable in plain Node) |
 | Audio capture | Rust native module (napi-rs) using WASAPI on Windows; Swift bridge for Core Audio taps on macOS |
@@ -142,7 +142,7 @@ Built in Phase 2; details in [ADR 0008](adr/0008-preparation-pipeline.md).
 - **Answer bank:**
   - drafts for common and role-specific questions, approved by the user;
   - matched locally (lexical, with phrasing variants) for instant answers.
-- **Model:** the preparation role (default `gemini-3.1-pro-preview`). Temporary failures are retried; long jobs show progress and can be cancelled.
+- **Model:** the preparation role (default `gemini-3.1-pro-preview`). Temporary failures are retried; long jobs show progress and can be cancelled. Keys that can't use Pro (Google's free tier) fall back to `gemini-3.8-flash` ([ADR 0012](adr/0012-distribution.md)).
 
 ## 7. Data (SQLite, local, encrypted)
 
@@ -195,6 +195,6 @@ spikes/              Phase 0 benchmarks and fixtures (kept as reference)
 | 3 | Audio capture on real devices, live transcription, copilot window, hotkeys | **Done** ([summary](phase3/summary.md)); real-device capture to confirm on a Windows PC |
 | 4 | Turn detection + answer generation (**Windows MVP**) | **Done** ([summary](phase4/summary.md)); real-interview tuning on a Windows PC |
 | 5 | Speed and quality hardening: fact check, echo cancellation, provider failover, cost per interview hour | **Done** ([summary](phase5/summary.md)); real-speaker test on a Windows PC; a second provider when a key is available |
-| 6 | Windows commercial release: onboarding, updates, licensing, privacy | Next |
-| 7 | macOS | |
+| 6 | Windows release: public downloads (GitHub Releases), automatic updates, first-run setup, free keys. Licensing and privacy work dropped by the owner: anyone can just use it | **Done** ([summary](phase6/summary.md)); signing waits for a certificate |
+| 7 | macOS | Next |
 | 8 | Practice mode, offline mode, analytics | |
