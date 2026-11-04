@@ -31,6 +31,7 @@ Decisions: [ADR 0009](../adr/0009-live-listening.md).
 | End-to-end (Playwright, built app) | **14 of 14 pass**: the 10 from Phases 1–2, plus:<ul><li>an audio test with meters and transcription;</li><li>an interview: the copilot window opens and follows the conversation, pause and resume from the copilot, end, the transcript in Sessions;</li><li>copilot and shortcut settings;</li><li>built-in capture with Chromium's fake microphone</li></ul> |
 | Packaged app smoke test (Linux) | Pass; schema version 3; native module loads from `app.asar.unpacked`; 279 ms to UI ready. Windows CI now also requires the native module to load in the installed app |
 | Live transcription (`AIC_LIVE_TESTS=1`, real Gemini) | Pass; see below |
+| CI ([run 41781749362](https://github.com/whiteangel-dev/AiInterviewCopilot/actions/runs/41781749362)) | All jobs pass. Windows: native module built with MSVC; unit and e2e tests; installer built; the unpacked and installed apps both load the native module |
 
 ### Live transcription with real Gemini
 
