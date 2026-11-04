@@ -34,6 +34,7 @@ Decisions: [ADR 0010](../adr/0010-live-answers.md).
 | Turn analyzer, real Gemini | Questions answered at the end of the turn 30/30; statements and filler 3/3; answered early at a mid-turn pause 3/16 (Phase 0: 19%) |
 | Whole engine, real Gemini | **17/17 correct** in 3 of 3 runs. Last word → first answer word **p50 1.15–1.36 s**, p95 1.44–1.87 s. Details below |
 | Live model roles | Fast: first text 0.77 s. Quality: 4.8 s. Both honest on the Kubernetes trap question |
+| CI ([run 41850659492](https://github.com/whiteangel-dev/AiInterviewCopilot/actions/runs/41850659492)) | All jobs pass, including Windows unit and e2e tests (16 of 16) and the installer |
 
 ### The whole engine with real Gemini
 
